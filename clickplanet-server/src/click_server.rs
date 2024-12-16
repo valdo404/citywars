@@ -17,11 +17,11 @@ use crate::click_service::ClickService;
 #[cfg(feature = "nats")]
 use crate::click_service::get_or_create_jet_stream;
 use axum::{
-    extract::{Json, State},
+    extract::{Json, Query, State},
     extract::ws::{Message as WebsocketMessage},
     extract::ws::{WebSocket},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     routing::post,
     routing::get,
     Router,
@@ -39,7 +39,8 @@ use clap::Parser;
 use futures_util::{SinkExt, StreamExt};
 use std::{time::Duration};
 use axum::extract::WebSocketUpgrade;
-use axum::http::header::CONTENT_TYPE;
+use axum::http::header::{ACCEPT, CONTENT_TYPE};
+use axum::http::HeaderMap;
 use axum::http::HeaderName;
 use axum::http::{Method, Request};
 use axum::serve::Serve;
@@ -439,9 +440,79 @@ async fn handle_ws_connection<T: ClickRepository>(socket: WebSocket, state: AppS
     }
 }
 
+/// Response formats of `/v2/rpc/leaderboard`.
+///
+/// The default stays the original Clickplanet RPC envelope, `{"data": "<base64 protobuf>"}`, which
+/// the web app and the original front end decode. The other formats are opt-in only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LeaderboardFormat {
+    /// `{"data": "<base64 protobuf>"}` (default, whatever the `Accept` header otherwise says).
+    Base64Envelope,
+    /// Raw protobuf bytes, for `Accept: application/protobuf` (or `application/x-protobuf`).
+    Protobuf,
+    /// Readable JSON, `{"entries": [{"country_id", "score"}]}`, for `?format=json`.
+    ReadableJson,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct LeaderboardQuery {
+    format: Option<String>,
+}
+
+impl LeaderboardFormat {
+    fn negotiate(headers: &HeaderMap, query: &LeaderboardQuery) -> Self {
+        if query.format.as_deref() == Some("json") {
+            return LeaderboardFormat::ReadableJson;
+        }
+        let wants_protobuf = headers
+            .get_all(ACCEPT)
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .flat_map(|value| value.split(','))
+            .map(|media| media.split(';').next().unwrap_or("").trim().to_ascii_lowercase())
+            .any(|media| media == "application/protobuf" || media == "application/x-protobuf");
+        if wants_protobuf {
+            LeaderboardFormat::Protobuf
+        } else {
+            LeaderboardFormat::Base64Envelope
+        }
+    }
+}
+
+fn leaderboard_response(response: &LeaderboardResponse, format: LeaderboardFormat) -> Response {
+    match format {
+        LeaderboardFormat::Base64Envelope => {
+            let payload = json!({
+                "data": encode(response.encode_to_vec()),
+            });
+            axum::Json(payload).into_response()
+        }
+        LeaderboardFormat::Protobuf => (
+            [(CONTENT_TYPE, "application/protobuf")],
+            response.encode_to_vec(),
+        )
+            .into_response(),
+        LeaderboardFormat::ReadableJson => {
+            let payload = json!({
+                "entries": response.entries.iter().map(|entry| {
+                    json!({
+                        "country_id": entry.country_id,
+                        "score": entry.score,
+                    })
+                }).collect::<Vec<_>>()
+            });
+            axum::Json(payload).into_response()
+        }
+    }
+}
+
 async fn handle_get_leaderboard<T: ClickRepository>(
     State(state): State<AppState<T>>,
-) -> Result<Json<Value>, StatusCode> {
+    Query(query): Query<LeaderboardQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    let format = LeaderboardFormat::negotiate(&headers, &query);
+
     let leaderboard_data = tokio::time::timeout(
         Duration::from_secs(5),
         state.leaderboard_repo.leaderboard(),
@@ -456,10 +527,6 @@ async fn handle_get_leaderboard<T: ClickRepository>(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    let mut response = LeaderboardResponse {
-        entries: Vec::new(),
-    };
-
     // Convert HashMap to vec and sort by score in descending order
     let mut entries: Vec<_> = leaderboard_data
         .into_iter()
@@ -470,18 +537,88 @@ async fn handle_get_leaderboard<T: ClickRepository>(
         .collect();
 
     entries.sort_by(|a, b| b.score.cmp(&a.score));
-    response.entries = entries;
+    let response = LeaderboardResponse { entries };
 
-    let mut response_bytes = Vec::new();
-    response
-        .encode(&mut response_bytes)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(leaderboard_response(&response, format))
+}
 
-    let base64_data = encode(&response_bytes);
+#[cfg(test)]
+mod leaderboard_format_tests {
+    use super::*;
+    use axum::body::to_bytes;
+    use axum::http::HeaderValue;
 
-    let payload = json!({
-        "data": base64_data,
-    });
+    fn sample() -> LeaderboardResponse {
+        LeaderboardResponse {
+            entries: vec![
+                LeaderboardEntry { country_id: "fr".to_string(), score: 3 },
+                LeaderboardEntry { country_id: "us".to_string(), score: 1 },
+            ],
+        }
+    }
 
-    Ok(axum::Json(payload))
+    fn negotiate(accept: Option<&str>, format: Option<&str>) -> LeaderboardFormat {
+        let mut headers = HeaderMap::new();
+        if let Some(accept) = accept {
+            headers.insert(ACCEPT, HeaderValue::from_str(accept).unwrap());
+        }
+        let query = LeaderboardQuery { format: format.map(str::to_string) };
+        LeaderboardFormat::negotiate(&headers, &query)
+    }
+
+    async fn body_of(response: Response) -> (Option<String>, Vec<u8>) {
+        let content_type = response
+            .headers()
+            .get(CONTENT_TYPE)
+            .map(|v| v.to_str().unwrap().to_string());
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        (content_type, body.to_vec())
+    }
+
+    #[test]
+    fn default_is_the_base64_envelope() {
+        assert_eq!(negotiate(None, None), LeaderboardFormat::Base64Envelope);
+        assert_eq!(negotiate(Some("*/*"), None), LeaderboardFormat::Base64Envelope);
+        assert_eq!(negotiate(Some("application/json"), None), LeaderboardFormat::Base64Envelope);
+        assert_eq!(negotiate(Some("text/html,*/*;q=0.8"), None), LeaderboardFormat::Base64Envelope);
+        assert_eq!(negotiate(None, Some("other")), LeaderboardFormat::Base64Envelope);
+    }
+
+    #[test]
+    fn other_formats_are_opt_in() {
+        assert_eq!(negotiate(Some("application/protobuf"), None), LeaderboardFormat::Protobuf);
+        assert_eq!(
+            negotiate(Some("application/json;q=0.5, application/x-protobuf"), None),
+            LeaderboardFormat::Protobuf
+        );
+        assert_eq!(negotiate(None, Some("json")), LeaderboardFormat::ReadableJson);
+    }
+
+    #[tokio::test]
+    async fn base64_envelope_is_unchanged() {
+        let (content_type, body) = body_of(leaderboard_response(&sample(), LeaderboardFormat::Base64Envelope)).await;
+        assert_eq!(content_type.as_deref(), Some("application/json"));
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json, json!({ "data": encode(sample().encode_to_vec()) }));
+    }
+
+    #[tokio::test]
+    async fn protobuf_is_the_raw_message() {
+        let (content_type, body) = body_of(leaderboard_response(&sample(), LeaderboardFormat::Protobuf)).await;
+        assert_eq!(content_type.as_deref(), Some("application/protobuf"));
+        assert_eq!(LeaderboardResponse::decode(body.as_slice()).unwrap(), sample());
+    }
+
+    #[tokio::test]
+    async fn readable_json_lists_the_entries() {
+        let (_, body) = body_of(leaderboard_response(&sample(), LeaderboardFormat::ReadableJson)).await;
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            json,
+            json!({ "entries": [
+                { "country_id": "fr", "score": 3 },
+                { "country_id": "us", "score": 1 },
+            ]})
+        );
+    }
 }
