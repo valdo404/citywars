@@ -1,96 +1,65 @@
 use dioxus::prelude::*;
+use crate::app::components::modal_manager::ModalManager;
+use crate::app::components::select_with_search::{SelectWithSearch, Value as CountryValue};
+use crate::app::components::block_button::BlockButtonProps;
+use crate::app::countries::Country;
 
-// Settings component for controlling global application settings
-pub fn Settings() -> Element {
-    let mut show_settings = use_signal(|| false);
-    let mut selected_country = use_signal(String::new);
-    let mut show_grid = use_signal(|| true);
-    let mut user_name = use_signal(String::new);
+#[derive(Props, PartialEq, Clone)]
+pub struct SettingsProps {
+    pub country: Country,
+    pub set_country: Callback<Country>,
+}
+
+/// Settings component for controlling country selection
+#[component]
+pub fn Settings(props: SettingsProps) -> Element {
+    let country = props.country.clone();
     
-    let toggle_settings = move |_| {
-        show_settings.set(!show_settings());
+    // Callback to handle country selection
+    let on_change = move |selected_country: CountryValue| {
+        let new_country = Country {
+            name: selected_country.name,
+            code: selected_country.code,
+        };
+        props.set_country.call(new_country);
     };
     
-    let toggle_grid = move |_| {
-        show_grid.set(!show_grid());
+    // Convert country to CountryValue for SelectWithSearch
+    let selected_country = CountryValue {
+        code: country.code.clone(),
+        name: country.name.clone(),
     };
+    
+    // Create a list of available countries
+    // In a full implementation, this would be populated from the API
+    let available_countries = vec![
+        CountryValue { code: "us".to_string(), name: "United States".to_string() },
+        CountryValue { code: "fr".to_string(), name: "France".to_string() },
+        CountryValue { code: "de".to_string(), name: "Germany".to_string() },
+        CountryValue { code: "jp".to_string(), name: "Japan".to_string() },
+        CountryValue { code: "gb".to_string(), name: "United Kingdom".to_string() },
+    ];
     
     rsx! {
-        div { class: "settings-container",
-            button { 
-                class: "settings-toggle",
-                onclick: toggle_settings,
-                i { class: "fas fa-cog" }
-                " Settings"
-            }
-            
-            if show_settings() {
-                div { class: "settings-panel",
-                    h3 { "Game Settings" }
-                    
-                    div { class: "settings-section",
-                        label { "Your Username" }
-                        input {
-                            r#type: "text",
-                            placeholder: "Enter your username",
-                            value: "{user_name}",
-                            oninput: move |evt| user_name.set(evt.value().clone())
-                        }
-                    }
-                    
-                    div { class: "settings-section",
-                        label { "Your Country" }
-                        div { class: "country-selector",
-                            // In a full implementation, this would be populated from the API
-                            select {
-                                value: "{selected_country}",
-                                onchange: move |evt| selected_country.set(evt.value().clone()),
-                                option { value: "", "Select your country" }
-                                option { value: "us", "United States" }
-                                option { value: "fr", "France" }
-                                option { value: "de", "Germany" }
-                                option { value: "jp", "Japan" }
-                                option { value: "gb", "United Kingdom" }
-                            }
-                        }
-                    }
-                    
-                    div { class: "settings-section",
-                        label { "Display Settings" }
-                        div { class: "toggle-option",
-                            input {
-                                id: "show-grid",
-                                r#type: "checkbox",
-                                checked: "{show_grid}",
-                                onclick: toggle_grid
-                            }
-                            label { r#for: "show-grid", "Show Grid" }
-                        }
-                    }
-                    
-                    div { class: "settings-actions",
-                        button {
-                            class: "primary-button",
-                            onclick: move |_| {
-                                // In a full implementation, this would save settings to an API
-                                log::info!(
-                                    "Saved settings: Username: {}, Country: {}, Show Grid: {}", 
-                                    user_name(), 
-                                    selected_country(), 
-                                    show_grid()
-                                );
-                                show_settings.set(false);
-                            },
-                            "Save Settings"
-                        }
-                        button {
-                            class: "secondary-button",
-                            onclick: move |_| show_settings.set(false),
-                            "Cancel"
-                        }
+        ModalManager {
+            open_by_default: false,
+            modal_title: "Country".to_string(),
+            button_props: BlockButtonProps {
+                on_click: Callback::new(|_| {}),
+                text: country.name.clone(),
+                image_url: format!("/static/countries/svg/{}.svg", country.code),
+                class_name: Some("button-settings".to_string()),
+            },
+            close_button_text: None,
+            modal_children: rsx! {
+                div { class: "",
+                    SelectWithSearch {
+                        on_change: on_change,
+                        selected: selected_country,
+                        values: available_countries,
                     }
                 }
-            }
+            },
         }
     }
 }
