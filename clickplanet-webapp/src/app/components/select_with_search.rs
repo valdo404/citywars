@@ -68,7 +68,15 @@ pub fn SelectWithSearch(props: SelectWithSearchProps) -> Element {
                             },
                             key: "{v.code}", // Unique key for each option
                             value: "{v.code}",
-                            "{v.name}"
+                            span {
+                                img {
+                                    src: format!("/static/countries/png100px/{}.png", v.code.to_lowercase()),
+                                    alt: v.code.clone(),
+                                    class: "country-flag",
+                                    style: "width: 24px; height: 16px; margin-right: 8px; vertical-align: middle;"
+                                }
+                                span { "{v.name}" }
+                            }
                         }
                     )
                 })}
