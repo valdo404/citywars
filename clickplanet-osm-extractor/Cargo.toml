@@ -15,6 +15,14 @@ thiserror = { workspace = true }
 deadpool-postgres = "0.14.1" # Check for latest version
 tokio-postgres = "0.7.12"
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros"] }
+futures = "0.3.31"
+log = "0.4.22"
+env_logger = "0.11.6"
+chrono = "0.4.39"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
+tracing = "0.1.41"
+tracing-log = "0.2.0"
+tokio-stream = "0.1.17"
 
 [[bin]]
 name = "osm-extractor"
