@@ -1,17 +1,18 @@
 use dioxus::prelude::*;
-use crate::CloseButton;
+use crate::app::components::close_button::CloseButton;
 
-#[derive(Props, Clone, PartialEq)]
+// In Dioxus 0.6.x, component props use derive(Props) directly
+#[derive(PartialEq, Clone, Props)]
 pub struct ModalProps {
     #[props(optional)]
     pub title: Option<String>,             // Optional title for the modal
     pub children: Element,                // modal content
-    pub on_close: Callback<()>,           // Callback for when the modal is closed
+    pub on_close: EventHandler<()>,           // Callback for when the modal is closed
     #[props(optional)]
     pub close_button_text: Option<String>, // Optional text for the close button
 }
 
-#[component]
+// Updated for Dioxus 0.6.x compatibility
 pub fn Modal(props: ModalProps) -> Element {
     rsx!(
         div {

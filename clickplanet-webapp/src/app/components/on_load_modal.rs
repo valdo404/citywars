@@ -1,13 +1,15 @@
 use dioxus::prelude::*;
 use crate::app::components::modal::Modal;
 
-#[derive(Props, Clone, PartialEq)]
+// Updated for Dioxus 0.6.x compatibility
+#[derive(PartialEq, Clone, Props)]
 pub struct OnLoadModalProps {
-    title: String,              // Title for the Modal
-    children: Element,       // Children of the Modal
+    pub title: String,         // Title for the Modal
+    pub children: Element,     // Children of the Modal
+    pub on_close: EventHandler<()>,  // Event handler for closing the modal without event data
 }
 
-#[component]
+// Updated for Dioxus 0.6.x compatibility
 pub fn OnLoadModal(props: OnLoadModalProps) -> Element {
     let mut is_open = use_signal(|| true); // Local state to track modal visibility
 
@@ -15,7 +17,12 @@ pub fn OnLoadModal(props: OnLoadModalProps) -> Element {
         rsx!(
             div { class: "modal-onload",
                 Modal {
-                    on_close: move || is_open.set(false),
+                    on_close: move || {
+                        is_open.set(false);
+                        // Forward the close event to the parent
+                        // Call the handler with unit value since we don't need event data
+                        props.on_close.call(());
+                    },
                     title: props.title.to_string(),
                     children: props.children.clone(),
                 }

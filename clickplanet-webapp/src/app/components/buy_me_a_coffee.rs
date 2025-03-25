@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-#[component]
+// In Dioxus 0.6.x, components are defined as regular functions
 pub fn BuyMeACoffee() -> Element {
     rsx!(
         a {

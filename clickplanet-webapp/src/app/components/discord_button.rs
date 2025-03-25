@@ -1,13 +1,13 @@
 use dioxus::prelude::*;
 
-
-#[derive(Props, Clone, PartialEq)]
+// Updated for Dioxus 0.6.x compatibility
+#[derive(PartialEq, Clone, Props)]
 pub struct DiscordButtonProps {
     #[props(optional)]
     pub message: Option<String>, // Optional message to display, defaults to "Join us on Discord"
 }
 
-#[component]
+// Updated for Dioxus 0.6.x compatibility
 pub fn DiscordButton(props: DiscordButtonProps) -> Element {
     let message = props
         .message
