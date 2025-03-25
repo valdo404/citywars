@@ -6,11 +6,15 @@ description = "OSM Extractor implementation for ClickPlanet game"
 license = "MIT"
 
 [dependencies]
-clickplanet-proto = { path = "../clickplanet-proto" }
 postgres = "0.19.9"
 osmpbf = "0.3"
 serde_json = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
+rayon = { workspace = true }
+thiserror = { workspace = true }
+deadpool-postgres = "0.14.1" # Check for latest version
+tokio-postgres = "0.7.12"
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros"] }
 
 [[bin]]
 name = "osm-extractor"

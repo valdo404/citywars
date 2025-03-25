@@ -1,8 +1,13 @@
-use osmpbf::{Blob, BlobDecode, BlobReader, Node, TagIter, Way};
-use postgres::{Client, NoTls};
-use serde_json;
-use std::error::Error;
 use clap::Parser;
+use deadpool_postgres::{Client, Config, ManagerConfig, Object, PoolError, RecyclingMethod};
+use osmpbf::{Blob, BlobDecode, BlobReader, Node, TagIter, Way};
+use rayon::iter::ParallelIterator;
+use rayon::iter::ParallelBridge;
+use serde_json;
+use std::fs::File;
+use std::io::BufReader;
+use thiserror::Error;
+use tokio_postgres::{Config as PgConfig, NoTls};
 
 struct City {
     id: i64,
@@ -32,57 +37,83 @@ struct Args {
     db_url: String,
 }
 
-
-/// Entry point
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    extract_osm_to_db(&args.osm_file, &args.db_url)?;
+    extract_osm_to_db(&args.osm_file, &args.db_url).await?;
 
     println!("Extraction complete. Data saved to Postgres/PostGIS database.");
     Ok(())
 }
 
+async fn extract_osm_to_db(osm_file: &str, db_url: &str) -> Result<(), OsmError> {
+    let pg_config: &mut tokio_postgres::Config = PgConfig::new().host("localhost").user("user").password("password").dbname("osm"); // Configure
+    let mut cfg: Config = Config::new();
+    cfg.dbname = Some("osm".to_string());
+    cfg.manager = Some(ManagerConfig { recycling_method: RecyclingMethod::Fast });
+    let pool = cfg.create_pool(None, NoTls).unwrap();
 
-fn extract_osm_to_db(osm_file: &str, db_url: &str) -> Result<(), Box<dyn std::error::Error>> {
-    // Establish a Postgres connection
-    let mut client = Client::connect(db_url, NoTls)?;
+    let mut client = pool.get().await?;
+    create_cities_table(&mut client).await?;
+    create_roads_table(&mut client).await?;
 
-    // Create the required tables
-    create_cities_table(&mut client)?;
-    create_roads_table(&mut client)?;
+    let reader: BlobReader<BufReader<File>> = BlobReader::from_path(osm_file)?;
 
-    // Open and process the OSM file
-    let reader = BlobReader::from_path(osm_file)?;
 
-    for blob in reader {
-        let blob: Blob = blob?;
+    reader.par_bridge().for_each(|blob| {
+        let copied_pool = pool.clone();
 
-        decode_blob(&mut client, blob)?;
-    }
+        tokio::spawn(async move {  // Spawn a Tokio task for each blob
+            let result: Result<(), OsmError> = {
+                let blob = blob.map_err(OsmError::from).unwrap();
+                let mut client = copied_pool.get().await.unwrap(); // corrected here
+                decode_blob(&mut client, blob).await
+            };
+            if let Err(e) = result {
+                eprintln!("Error processing blob: {}", e); // Or better error handling
+            }
+        });
+    });
 
     Ok(())
 }
 
+#[derive(Error, Debug)]
+enum OsmError {
+    #[error("Decoding error: {0}")]
+    DecodeError(String),
+    #[error("Pool error: {0}")]
+    PoolError(#[from] PoolError),
+    #[error("OSM error: {0}")]
+    OsmError(#[from] osmpbf::Error),
+    #[error("Database error: {0}")]
+    DatabaseError(#[from] postgres::Error),
+    #[error("Serde JSON error: {0}")]
+    SerdeJsonError(#[from] serde_json::Error),
+    #[error("I/O error: {0}")]
+    IoError(#[from] std::io::Error),
+}
 
-fn decode_blob(client: &mut Client, blob: Blob) -> Result<(), Box<dyn Error>> {
-    if let BlobDecode::OsmData(block) = blob.decode()? {
+async fn decode_blob(client: &mut Client, blob: Blob) -> Result<(), OsmError> {
+    let result: Result<BlobDecode, OsmError> = blob.decode().map_err(OsmError::from);
+    if let BlobDecode::OsmData(block) = result? {
         for group in block.groups() {
             // Process cities (nodes with "place=city" or "place=town")
             for node in group.nodes() {
-                decode_node(client, node)?;
+                decode_node(client, node).await?;
             }
 
             // Process roads (ways with "highway" tag)
             for way in group.ways() {
-                decode_way(client, way)?;
+                decode_way(client, way).await?;
             }
         }
     }
     Ok(())
 }
 
-fn decode_way(client: &mut Client, way: Way) -> Result<(), Box<dyn Error>> {
+async fn decode_way(client: &mut Object, way: Way<'_>) -> Result<(), OsmError> {
     let mut tags: TagIter = way.tags();
 
     if tags.any(|(key, _)| key == "highway") {
@@ -102,7 +133,7 @@ fn decode_way(client: &mut Client, way: Way) -> Result<(), Box<dyn Error>> {
             nodes,
         };
 
-        insert_road(client, &road)?;
+        insert_road(client, &road).await?;
     };
 
 
@@ -111,7 +142,7 @@ fn decode_way(client: &mut Client, way: Way) -> Result<(), Box<dyn Error>> {
 
 
 
-fn decode_node(client: &mut Client, node: Node) -> Result<(), Box<dyn Error>> {
+async fn decode_node(client: &mut Object, node: Node<'_>) -> Result<(), OsmError> {
     let tags = node.tags();
 
     let mut place_tag = None;
@@ -137,7 +168,7 @@ fn decode_node(client: &mut Client, node: Node) -> Result<(), Box<dyn Error>> {
                 population: population_tag.and_then(|p| p.parse().ok()),
             };
 
-            insert_city(client, &city)?;
+            insert_city(client, &city).await?;
         }
     }
 
@@ -145,7 +176,7 @@ fn decode_node(client: &mut Client, node: Node) -> Result<(), Box<dyn Error>> {
 }
 
 
-fn create_roads_table(client: &mut Client) -> Result<(), Box<dyn Error>> {
+async fn create_roads_table(client: &mut Client) -> Result<(), OsmError> {
     client.execute(
         "CREATE TABLE IF NOT EXISTS roads (
             road_id BIGINT PRIMARY KEY,
@@ -153,11 +184,11 @@ fn create_roads_table(client: &mut Client) -> Result<(), Box<dyn Error>> {
             nodes JSONB
         )",
         &[],
-    )?;
+    ).await?;
     Ok(())
 }
 
-fn create_cities_table(client: &mut Client) -> Result<(), Box<dyn Error>> {
+async fn create_cities_table(client: &mut Client) -> Result<(), OsmError> {
     client.execute(
         "CREATE TABLE IF NOT EXISTS cities (
             city_id BIGINT PRIMARY KEY,
@@ -168,11 +199,11 @@ fn create_cities_table(client: &mut Client) -> Result<(), Box<dyn Error>> {
             geom GEOGRAPHY(Point, 4326)
         )",
         &[],
-    )?;
+    ).await?;
     Ok(())
 }
 
-fn insert_road(client: &mut Client, road: &Road) -> Result<(), Box<dyn Error>> {
+async fn insert_road(client: &mut Object, road: &Road) -> Result<(), OsmError> {
     client.query(
         "INSERT INTO roads (road_id, name, nodes)
                                  VALUES ($1, $2, $3)",
@@ -181,12 +212,12 @@ fn insert_road(client: &mut Client, road: &Road) -> Result<(), Box<dyn Error>> {
             &road.name,
             &serde_json::to_string(&road.nodes)?,
         ],
-    )?;
+    ).await?;
 
     Ok(())
 }
 
-fn insert_city(client: &mut Client, city: &City) -> Result<(), Box<dyn Error>> {
+async fn insert_city(client: &mut Client, city: &City) -> Result<(), OsmError> {
     client.execute(
         "INSERT INTO cities (city_id, name, latitude, longitude, population, geom)
                                      VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($3, $4), 4326))",
@@ -197,6 +228,6 @@ fn insert_city(client: &mut Client, city: &City) -> Result<(), Box<dyn Error>> {
             &city.lon,
             &city.population,
         ],
-    )?;
+    ).await?;
     Ok(())
 }

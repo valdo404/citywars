@@ -778,10 +778,14 @@ name = "clickplanet-osm-extractor"
 version = "0.1.0"
 dependencies = [
  "clap",
- "clickplanet-proto",
+ "deadpool-postgres",
  "osmpbf",
  "postgres",
+ "rayon",
  "serde_json",
+ "thiserror 2.0.8",
+ "tokio",
+ "tokio-postgres",
 ]
 
 [[package]]
@@ -1165,12 +1169,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadpool"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6541a3916932fe57768d4be0b1ffb5ec7cbf74ca8c903fdfd5c0fe8aa958f0ed"
+dependencies = [
+ "deadpool-runtime",
+ "num_cpus",
+ "tokio",
+]
+
+[[package]]
+name = "deadpool-postgres"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d697d376cbfa018c23eb4caab1fd1883dd9c906a8c034e8d9a3cb06a7e0bef9"
+dependencies = [
+ "async-trait",
+ "deadpool 0.12.1",
+ "getrandom",
+ "tokio",
+ "tokio-postgres",
+ "tracing",
+]
+
+[[package]]
 name = "deadpool-redis"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84930e585871d35b8e06d3e03d03e3a8a4c5dc71afa4376c7cd5f9223e1da1ea"
 dependencies = [
- "deadpool",
+ "deadpool 0.10.0",
  "redis",
 ]
 

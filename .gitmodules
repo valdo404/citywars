@@ -1,0 +1,6 @@
+[submodule "original-frontend"]
+	path = original-frontend
+	url = git@github.com:raphoester/clickplanet.lol-frontend.git
+[submodule "original-backend"]
+	path = original-backend
+	url = git@github.com:raphoester/clickplanet.lol-backend.git
