@@ -19,26 +19,55 @@ clickplanet-proto = { path = "../clickplanet-proto" }
 wasm-bindgen = { version = "0.2.89", features = ["serde-serialize"] }
 web-sys = { version = "0.3", features = [
     "WebSocket", "MessageEvent", "CloseEvent", "ErrorEvent", "console",
-    "Window", "Document", "Element", "HtmlElement", "Node", "BinaryType"] }
+    "Window", "Document", "Element", "HtmlElement", "Node", "BinaryType",
+    "CanvasRenderingContext2d", "HtmlCanvasElement", "MouseEvent", "EventTarget",
+    "EventListener", "Event", "DomRect"] }
 js-sys = "0.3"
 serde-wasm-bindgen = "0.6.5"
 serde.workspace = true
 prost.workspace = true
 anyhow = "1.0"
-image = "0.24"
+image = { version = "0.25.5", default-features = false, features = ["png"] }
 serde_json = "1.0"
-glam = "0.29.2"
-uuid = { version = "1.11.0", features = ["v4"] }
-
-getrandom = { version = "0.2.15", features = ["js"] }
+glam = "0.30.1"
+uuid = { version = "1.11.0", features = ["v4", "serde"] }
+# For WebAssembly compatibility
+getrandom = { version = "0.2.10", features = ["js"] }
 rand = "0.8.5"
 base64 = "0.22.1"
-tokio-tungstenite = "0.26.1"
-tokio = "1.42.0"
+# For WebAssembly, use the browser's native APIs instead of native libs
+# Removing all native libs that don't work in WASM
+
+# Use gloo-net for HTTP requests in WASM
+gloo-net = "0.6.0"
+
+# Use gloo for WebSockets and timers in WASM
+gloo = { version = "0.11.0", features = ["net", "timers"] }
+
+# Ensure wasm-bindgen-futures is available for async ops
+wasm-bindgen-futures = "0.4.39"
+
+# Dioxus dependencies for UI
+dioxus = { version = "0.6.2", features = ["web", "router"] }
+dioxus-web = { version = "0.6.2" }
+dioxus-hooks = "0.6.2"
+dioxus-router = "0.6.3"
+console_log = "1.0.0"
+log = "0.4.21"
+
+# Enable/disable features based on target
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 reqwest = { version = "0.12.9", features = ["json"] }
+tokio = { version = "1.42.0", features = ["sync", "rt", "time"] }
+tokio-tungstenite = "0.26.1"
 async-trait = "0.1.83"
 futures-util = "0.3.31"
-dioxus = { version = "0.6.1", features = ["web"] }
-dioxus-hooks = "0.6.1"
+dioxus = { version = "0.6.2", features = ["web", "router"] }
+dioxus-web = { version = "0.6.2" }
+dioxus-hooks = "0.6.2"
+dioxus-router = "0.6.3"
 console_log = "1.0.0"
 log = "0.4.22"
+wasm-bindgen-futures = "0.4.39"
+gloo-timers = "0.3.0"
+lazy_static = "1.4.0"
