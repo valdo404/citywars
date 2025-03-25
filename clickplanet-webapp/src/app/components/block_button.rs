@@ -15,10 +15,19 @@ pub fn BlockButton(props: BlockButtonProps) -> Element {
         None => "button".to_string(),
     };
 
-    rsx!(
+    rsx! {
         button {
-            class: "{class_name}",
+            class: class_name,
             onclick: move |evt| props.on_click.call(evt), // Call the callback
-            "{props.text}"
-        })
+            if !props.image_url.is_empty() {
+                img {
+                    src: format!("/public{}", props.image_url),
+                    alt: props.text.clone(),
+                    class: "button-icon",
+                    style: "margin-right: 8px; width: 20px; height: 20px;"
+                }
+            }
+            span {{ props.text.clone() }}
+        }
+    }
 }
