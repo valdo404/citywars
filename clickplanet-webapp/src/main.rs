@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_web::launch;
 use std::cell::RefCell;
+use crate::app::countries::Country;
 
 mod app {
     pub mod components {
@@ -100,20 +101,9 @@ fn App() -> Element {
     */
     
     rsx! {
-        nav { class: "main-nav",
-            button { 
-                onclick: move |_| navigate(Route::Home {}),
-                class: if matches!(current_route(), Route::Home {}) { "active" } else { "" },
-                "Home" 
-            }
-            button { 
-                onclick: move |_| navigate(Route::About {}),
-                class: if matches!(current_route(), Route::About {}) { "active" } else { "" },
-                "About" 
-            }
-        }
-        
+        // Simplified to match original implementation without navigation bar
         div { class: "content",
+            // Always show the HomeScreen as the original implementation does
             match current_route() {
                 Route::Home {} => rsx! { HomeScreen {} },
                 Route::About {} => rsx! { AboutScreen {} },
@@ -125,6 +115,17 @@ fn App() -> Element {
 // Updated for Dioxus 0.6.x compatibility
 fn HomeScreen() -> Element {
     let mut show_welcome_modal = use_signal(|| true);
+    
+    // Manage country state here, similar to the original TypeScript implementation
+    let mut country = use_signal(|| Country {
+        name: "United States".to_string(),
+        code: "us".to_string(),
+    });
+    
+    // Callback to update country
+    let set_country = move |new_country: Country| {
+        country.set(new_country);
+    };
     
     rsx! {
         div { class: "container",
@@ -160,7 +161,10 @@ fn HomeScreen() -> Element {
             div { class: "menu",
                 app::components::leaderboard::Leaderboard {}
                 div { class: "menu-actions",
-                    app::components::settings::Settings {}
+                    app::components::settings::Settings {
+                        country: country(),
+                        set_country: Callback::new(set_country),
+                    }
                     app::components::about::About {}
                     app::components::discord_button::DiscordButton {
                         message: Some("Join our Discord server".to_string()),
