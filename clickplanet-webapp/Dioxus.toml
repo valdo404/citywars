@@ -1,11 +1,11 @@
 [application]
 
-name = "clickplaner"
+name = "clickplanet"
 
 [web.app]
 
 # HTML title tag content
-title = "clickplanet test"
+title = "clickplanet"
 
 # include `assets` in web platform
 [web.resource]

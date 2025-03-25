@@ -4,8 +4,21 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ClickPlanet</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap" rel="stylesheet">
     <link data-trunk rel="rust" data-wasm-opt="z" data-bin="clickplanet-webapp" />
-    <link data-trunk rel="css" href="public/style.css" />
+    <!-- Component-based CSS structure (directly including all files) -->
+    <link data-trunk rel="css" href="public/styles/base.css" />
+    <link data-trunk rel="css" href="public/styles/DiscordButton.css" />
+    <link data-trunk rel="css" href="public/styles/BuyMeACoffee.css" />
+    <link data-trunk rel="css" href="public/styles/Modal.css" />
+    <link data-trunk rel="css" href="public/styles/CloseButton.css" />
+    <link data-trunk rel="css" href="public/styles/SelectWithSearch.css" />
+    <link data-trunk rel="css" href="public/styles/About.css" />
+    <link data-trunk rel="css" href="public/styles/Leaderboard.css" />
+    <link data-trunk rel="css" href="public/styles/Menu.css" />
+    <link data-trunk rel="css" href="public/styles/rust-specific.css" />
     <link data-trunk rel="copy-dir" href="public" />
     <base data-trunk-public-url />
   </head>
