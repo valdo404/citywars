@@ -1,0 +1,201 @@
+/* Base CSS for ClickPlanet Rust Implementation */
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: "Luckiest Guy", sans-serif;
+    background-color: #000;
+    position: fixed;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: #fff;
+    font-weight: 400;
+    text-shadow: -1px 1px 0 #000000;
+}
+
+h1 {
+    font-size: 42px;
+    margin: 12px 0 0;
+}
+
+h2 {
+    font-size: 36px;
+    margin: 24px auto 8px;
+}
+
+h3, h4 {
+    text-align: center;
+    margin: 16px auto 0;
+}
+
+h4 {
+    color: #ff813f;
+}
+
+p {
+    font-size: 14px;
+    color: #dbdbdb;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+a {
+    color: #FFFFFF;
+    text-decoration: none;
+    font-family: Helvetica, sans-serif;
+}
+
+a:hover {
+    color: #FFFFFF;
+    text-decoration: underline;
+    transition: 0.125s ease;
+}
+
+th {
+    text-align: left;
+}
+
+table {
+    width: 98%;
+    font-size: 20px;
+    padding: 0;
+    text-shadow: -1px 1px 0 #000000;
+    color: white;
+}
+
+.button {
+    padding: 18px;
+    color: white;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 16px;
+    border: none;
+    height: 56px;
+    font-size: 28px;
+    text-shadow: -1px 1px 0 #000000;
+    font-family: "Luckiest Guy", sans-serif;
+}
+
+.button:hover {
+    background: #FFFFFF25;
+    transition: 0.125s ease;
+}
+
+.button-mini {
+    padding: 12px 8px 8px;
+    margin-top: 8px;
+    width: fit-content;
+    height: 40px;
+    font-size: 18px;
+    border-radius: 8px;
+    border: 1px solid white;
+}
+
+.center-align {
+    text-align: center;
+}
+
+/* Scrollbar styling */
+* {
+    box-sizing: border-box;
+    /* Firefox specific */
+    scrollbar-color: #FFFFFF66 transparent;
+    scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: #fff6;
+    border-radius: 20px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: #fff6;
+}
+
+::-webkit-scrollbar-button:start,
+::-webkit-scrollbar-button:end,
+::-webkit-scrollbar-button:single-button,
+::-webkit-scrollbar-button:horizontal:decrement,
+::-webkit-scrollbar-button:horizontal:increment,
+::-webkit-scrollbar-button:vertical:decrement,
+::-webkit-scrollbar-button:vertical:increment {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background-color: transparent !important;
+    visibility: hidden !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Menu styles */
+.menu {
+    top: 16px;
+    left: 16px;
+    width: 360px;
+    z-index: 128;
+    padding: 16px;
+    border: 1px solid #FFFFFF33;
+    border-radius: 24px;
+    position: absolute;
+    background: #00000075;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+
+.menu-actions {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+@media only screen and (max-width: 768px) {
+    .button {
+        width: fit-content;
+        font-size: 14px;
+        height: 40px;
+        padding: 6px 16px 0;
+        border-radius: 16px;
+    }
+    
+    .button-mini {
+        padding-top: 4px;
+    }
+    
+    .menu {
+        top: 0;
+        left: 0;
+        width: 100%;
+        z-index: 128;
+        padding: 8px;
+        border: none;
+        border-radius: 0 0 24px 24px;
+        position: absolute;
+        background: #00000075;
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+    }
+    
+    .menu-actions {
+        margin-top: 0;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        padding-top: 8px;
+    }
+}

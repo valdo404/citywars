@@ -1,0 +1,17 @@
+.button-close {
+    width: 100%;
+    border: 1px solid #FFFFFF;
+}
+
+.button-close:hover {
+    border: 1px solid transparent;
+    transition: 0.125s ease;
+}
+
+@media only screen and (max-width: 768px) {
+    .button-close {
+        width: fit-content;
+        margin: auto;
+        padding-top: 4px;
+    }
+}

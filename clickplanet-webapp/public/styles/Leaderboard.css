@@ -1,0 +1,33 @@
+.leaderboard-header {
+    display: flex;
+    text-align: center;
+    justify-content: center;
+    gap: 16px;
+}
+
+.button-leaderboard {
+    width: 100%;    
+}
+
+.leaderboard-expand {
+    display: flex;
+    justify-content: center;
+}
+
+.leaderboard-table-container {
+    max-height: 352px;
+    overflow: auto;
+}
+
+.leaderboard-table-number {
+    text-align: right;
+}
+
+.leaderboard-table-tiles {
+    color: #FFFFFF99;
+    text-shadow: -1px 1px 0px #404040;
+}
+
+.leaderboard-entry-index {
+    text-align: right;
+}
