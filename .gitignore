@@ -2,6 +2,17 @@
 target
 node_modules
 
+# Data directories
 data/redis/*
 data/nats/config/*
 data/nats/jetstream/*
+
+# Build artifacts
+*.log
+build_log.txt
+clickplanet-webapp/build_log.txt
+clickplanet-webapp/dist/
+
+# System files
+.DS_Store
+*/.DS_Store
