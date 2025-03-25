@@ -5,6 +5,7 @@ use std::thread;
 use uuid::Uuid;
 use crate::backends::backend::{Ownerships, OwnershipsGetter, TileClicker, Update, UpdatesListener};
 
+#[allow(dead_code)]
 pub struct FakeBackend {
     tile_bindings: Arc<Mutex<HashMap<u32, String>>>,
     update_listeners: Arc<Mutex<HashMap<String, Box<dyn Fn(Update) + Send + Sync>>>>,
@@ -12,6 +13,7 @@ pub struct FakeBackend {
     batch_update_callbacks: Arc<Mutex<HashMap<String, Box<dyn Fn(Vec<Update>) + Send + Sync>>>>,
 }
 
+#[allow(dead_code)]
 impl FakeBackend {
     pub fn new(batch_update_duration_ms: u64, countries: Vec<String>) -> Arc<Self> {
         let backend = Arc::new(Self {
@@ -104,10 +106,9 @@ impl UpdatesListener for FakeBackend {
             listeners.insert(id.clone(), callback);
         }
 
-        Box::new(move || {
-            let mut listeners = self.update_listeners.lock().unwrap();
-            listeners.remove(&id);
-        })()
+        // Directly remove the listener instead of creating a Box and immediately invoking it
+        let mut listeners = self.update_listeners.lock().unwrap();
+        let _ = listeners.remove(&id); // Discard the result as we don't need it
     }
 
     fn listen_for_updates_batch(
@@ -120,10 +121,9 @@ impl UpdatesListener for FakeBackend {
             batch_callbacks.insert(id.clone(), callback);
         }
 
-        Box::new(move || {
-            let mut batch_callbacks = self.batch_update_callbacks.lock().unwrap();
-            batch_callbacks.remove(&id);
-        })()
+        // Directly remove the callback instead of creating a Box and immediately invoking it
+        let mut batch_callbacks = self.batch_update_callbacks.lock().unwrap();
+        let _ = batch_callbacks.remove(&id); // Discard the result as we don't need it
     }
 }
 

@@ -1,14 +1,17 @@
 use std::collections::HashMap;
 
+#[allow(dead_code)]
 pub trait TileClicker {
     fn click_tile(&mut self, tile_id: u32, country_id: String);
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Ownerships {
     pub bindings: HashMap<u32, String>,
 }
 
+#[allow(dead_code)]
 impl Ownerships {
     pub fn new() -> Self {
         Ownerships {
@@ -25,6 +28,7 @@ impl Ownerships {
     }
 }
 
+#[allow(dead_code)]
 pub trait OwnershipsGetter {
     fn get_current_ownerships_by_batch(
         &self,
@@ -35,12 +39,14 @@ pub trait OwnershipsGetter {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Update {
     pub tile: u32,
     pub previous_country: Option<String>,
     pub new_country: String,
 }
 
+#[allow(dead_code)]
 impl Update {
     pub fn new(tile: u32, previous_country: Option<String>, new_country: String) -> Self {
         Update {
@@ -51,6 +57,7 @@ impl Update {
     }
 }
 
+#[allow(dead_code)]
 pub trait UpdatesListener {
     fn listen_for_updates(&self, callback: Box<dyn Fn(Update) + Send + Sync>) -> ();
 
