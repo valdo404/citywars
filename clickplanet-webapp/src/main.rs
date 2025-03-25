@@ -167,7 +167,7 @@ fn HomeScreen() -> Element {
                     }
                     app::components::about::About {}
                     app::components::discord_button::DiscordButton {
-                        message: Some("Join our Discord server".to_string()),
+                        message: Some("Join us on Discord".to_string()),
                     }
                 }
             }

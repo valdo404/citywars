@@ -2,6 +2,33 @@ use dioxus::prelude::*;
 use std::rc::Rc;
 use dioxus::logger::tracing::event;
 
+/// Convert a country code (e.g., "us") to a flag emoji (e.g., "🇺🇸")
+fn get_flag_emoji(country_code: &str) -> String {
+    // Regional Indicator Symbols start at Unicode codepoint U+1F1E6 for 'A'
+    // We convert each ASCII letter to its regional indicator symbol
+    let regional_indicator_a = 0x1F1E6; // Unicode codepoint for Regional Indicator Symbol Letter A
+    
+    // Convert country code to uppercase and then to flag emoji
+    country_code
+        .to_uppercase()
+        .chars()
+        .map(|c| {
+            // Only process A-Z characters
+            if c >= 'A' && c <= 'Z' {
+                // Calculate the codepoint for the regional indicator symbol
+                let offset = c as u32 - 'A' as u32;
+                let regional_indicator = regional_indicator_a + offset;
+                
+                // Convert the codepoint to a character
+                std::char::from_u32(regional_indicator).unwrap_or(' ')
+            } else {
+                // Leave non-alphabetic characters as-is
+                c
+            }
+        })
+        .collect()
+}
+
 #[derive(PartialEq, Clone)]
 pub struct Value {
     pub code: String,
@@ -59,6 +86,9 @@ pub fn SelectWithSearch(props: SelectWithSearchProps) -> Element {
                 size: "5",
                 {filtered_options.into_iter().map(|v| {
                     let value = v.clone();
+                    // Format the display text with flag emoji outside the RSX macro
+                    let display_text = format!("{}  {}", get_flag_emoji(&v.code), v.name);
+                    
                     rsx!(
                         option {
                             class: "input-select-option",
@@ -68,15 +98,7 @@ pub fn SelectWithSearch(props: SelectWithSearchProps) -> Element {
                             },
                             key: "{v.code}", // Unique key for each option
                             value: "{v.code}",
-                            span {
-                                img {
-                                    src: format!("/static/countries/png100px/{}.png", v.code.to_lowercase()),
-                                    alt: v.code.clone(),
-                                    class: "country-flag",
-                                    style: "width: 24px; height: 16px; margin-right: 8px; vertical-align: middle;"
-                                }
-                                span { "{v.name}" }
-                            }
+                            "{display_text}"
                         }
                     )
                 })}

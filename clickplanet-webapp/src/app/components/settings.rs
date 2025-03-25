@@ -47,7 +47,7 @@ pub fn Settings(props: SettingsProps) -> Element {
             button_props: BlockButtonProps {
                 on_click: Callback::new(|_| {}),
                 text: country.name.clone(),
-                image_url: format!("/static/countries/svg/{}.svg", country.code),
+                image_url: format!("/static/countries/svg/{}.svg", country.code.to_lowercase()),
                 class_name: Some("button-settings".to_string()),
             },
             close_button_text: None,
