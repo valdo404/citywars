@@ -1,86 +1,148 @@
 use dioxus::prelude::*;
+use crate::app::countries::Country;
 
-// Structure to store leaderboard entry data
+// Structure to store leaderboard entry data matching the TypeScript implementation
 #[derive(Debug, Clone, PartialEq)]
-struct LeaderboardEntry {
-    country_code: String,
-    country_name: String,
-    points: u32,
+pub struct LeaderboardEntry {
+    country: Country,
+    tiles: u32,
+}
+
+// Props for the Leaderboard component
+#[derive(Props, PartialEq, Clone)]
+pub struct LeaderboardProps {
+    #[props(default)]
+    pub data: Option<Vec<LeaderboardEntry>>,
+    #[props(default = 120000)]
+    pub tiles_count: u32,
 }
 
 // Component for displaying the leaderboard
 #[component]
 pub fn Leaderboard() -> Element {
-    let mut is_expanded = use_signal(|| false);
+    let mut is_open = use_signal(|| true);
+    
+    // Total number of tiles in the globe - matches the default in the TypeScript implementation
+    let total_tiles = 120000; // This would come from props.tiles_count in a real implementation
     
     // In a full implementation, this would be fetched from an API
-    let mut entries = use_signal(|| {
+    let entries = use_signal(|| {
         let mut mock_data = vec![
             LeaderboardEntry {
-                country_code: "US".to_string(),
-                country_name: "United States".to_string(),
-                points: 8754,
+                country: Country { name: "United States".to_string(), code: "us".to_string() },
+                tiles: 28754,
             },
             LeaderboardEntry {
-                country_code: "FR".to_string(),
-                country_name: "France".to_string(),
-                points: 7234,
+                country: Country { name: "France".to_string(), code: "fr".to_string() },
+                tiles: 22345,
             },
             LeaderboardEntry {
-                country_code: "DE".to_string(),
-                country_name: "Germany".to_string(),
-                points: 6145,
+                country: Country { name: "Germany".to_string(), code: "de".to_string() },
+                tiles: 18932,
             },
             LeaderboardEntry {
-                country_code: "JP".to_string(),
-                country_name: "Japan".to_string(),
-                points: 5467,
+                country: Country { name: "Japan".to_string(), code: "jp".to_string() },
+                tiles: 15467,
             },
             LeaderboardEntry {
-                country_code: "GB".to_string(),
-                country_name: "United Kingdom".to_string(),
-                points: 4932,
+                country: Country { name: "United Kingdom".to_string(), code: "gb".to_string() },
+                tiles: 12543,
+            },
+            LeaderboardEntry {
+                country: Country { name: "Brazil".to_string(), code: "br".to_string() },
+                tiles: 9876,
+            },
+            LeaderboardEntry {
+                country: Country { name: "Canada".to_string(), code: "ca".to_string() },
+                tiles: 7654,
+            },
+            LeaderboardEntry {
+                country: Country { name: "India".to_string(), code: "in".to_string() },
+                tiles: 6543,
+            },
+            LeaderboardEntry {
+                country: Country { name: "Australia".to_string(), code: "au".to_string() },
+                tiles: 5432,
+            },
+            LeaderboardEntry {
+                country: Country { name: "Spain".to_string(), code: "es".to_string() },
+                tiles: 4321,
             },
         ];
         
-        // Sort by points, descending
-        mock_data.sort_by(|a, b| b.points.cmp(&a.points));
+        // Sort by tiles, descending
+        mock_data.sort_by(|a, b| b.tiles.cmp(&a.tiles));
         mock_data
     });
 
-    let toggle_expanded = move |_| {
-        is_expanded.set(!is_expanded());
+    let toggle_leaderboard = move |_| {
+        is_open.set(!is_open());
     };
 
     rsx! {
         div { class: "leaderboard",
-            button { 
-                class: "leaderboard-toggle", 
-                onclick: toggle_expanded,
-                i { class: "fas fa-trophy" }
-                " Leaderboard"
+            div { class: "leaderboard-header",
+                img {
+                    alt: "ClickPlanet logo",
+                    src: "/public/static/favicon.png",
+                    width: "56px",
+                    height: "56px"
+                }
+                h1 { "ClickPlanet" }
+            }
+            div { class: "leaderboard-expand",
+                button { 
+                    class: "button button-leaderboard", 
+                    onclick: toggle_leaderboard,
+                    if is_open() { "Hide" } else { "Leaderboard" }
+                }
             }
 
-            if is_expanded() {
-                div { class: "leaderboard-content",
-                    div { class: "leaderboard-header",
-                        h3 { "Top Countries" }
-                    }
-                    ul { class: "leaderboard-list",
-                        {entries().iter().enumerate().map(|(index, entry)| {
-                            rsx! {
-                                li { key: "{index}",
-                                    span { class: "leaderboard-rank", "{index + 1}." }
-                                    img { 
-                                        class: "country-flag",
-                                        src: "/static/flags/{entry.country_code.to_lowercase()}.svg",
-                                        alt: "{entry.country_name} flag" 
-                                    }
-                                    span { class: "country-name", "{entry.country_name}" }
-                                    span { class: "country-points", "{entry.points} pts" }
-                                }
+            if is_open() {
+                div { class: "leaderboard-table-container",
+                    table { class: "leaderboard-table",
+                        thead {
+                            tr {
+                                th {}
+                                th { colspan: "3", "🌍" }
+                                th { class: "leaderboard-table-number leaderboard-table-tiles", "⚪️" }
+                                th { class: "leaderboard-table-number", "%" }
                             }
-                        })}
+                        }
+                        tbody {
+                            {entries().iter().enumerate().map(|(index, entry)| {
+                                // Calculate percentage of total tiles
+                                let percentage = (entry.tiles as f64 / total_tiles as f64 * 100.0).to_string();
+                                let formatted_percentage = format!("{:.2}", percentage);
+                                
+                                // Truncate country name if too long
+                                let max_length = 18;
+                                let country_name = if entry.country.name.len() > max_length {
+                                    format!("{}", entry.country.name[..max_length].trim())
+                                } else {
+                                    entry.country.name.clone()
+                                };
+                                
+                                rsx! {
+                                    tr { key: "{index}", class: "leaderboard-entry",
+                                        td { class: "leaderboard-entry-index", "{index + 1}." }
+                                        td { colspan: "3", 
+                                            img { 
+                                                class: "country-flag",
+                                                src: "/public/static/countries/svg/{entry.country.code.to_lowercase()}.svg",
+                                                alt: "{entry.country.name} flag",
+                                                width: "20px",
+                                                height: "auto",
+                                                style: "margin-right: 8px;"
+                                            }
+                                            span { "{country_name}" }
+                                        }
+                                        td { class: "leaderboard-table-number leaderboard-table-tiles", "{entry.tiles}" }
+                                        td { class: "leaderboard-table-number", "{formatted_percentage}" }
+                                    }
+                                }
+                            })}
+                        }
                     }
                 }
             }

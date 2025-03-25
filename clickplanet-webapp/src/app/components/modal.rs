@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use crate::app::components::close_button::CloseButton;
 
-// In Dioxus 0.6.x, component props use derive(Props) directly
 #[derive(PartialEq, Clone, Props)]
 pub struct ModalProps {
     #[props(optional)]
@@ -12,7 +11,6 @@ pub struct ModalProps {
     pub close_button_text: Option<String>, // Optional text for the close button
 }
 
-// Updated for Dioxus 0.6.x compatibility
 pub fn Modal(props: ModalProps) -> Element {
     rsx!(
         div {
