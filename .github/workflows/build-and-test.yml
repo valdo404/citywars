@@ -49,12 +49,19 @@ jobs:
         run: |
           cargo test --verbose --workspace
 
-      # Step 6. Run Build for Dioxus Web App (if applicable)
-#      - name: Build Dioxus frontend (WebAssembly)
-#        if: exists('./clickplanet-webapp/Dioxus.toml')
-#        run: |
-#          cd clickplanet-webapp
-#          dioxus build --release
+      # Step 6. Run Build for WebAssembly frontend
+      - name: Install Trunk
+        run: |
+          cargo install trunk --locked
+          
+      - name: Install wasm32 target
+        run: |
+          rustup target add wasm32-unknown-unknown
+          
+      - name: Build WebAssembly with Trunk
+        run: |
+          cd clickplanet-webapp
+          trunk build --release
 
       # Step 7. Lint and Format (Optional)
 #      - name: Run Clippy (Lint)
