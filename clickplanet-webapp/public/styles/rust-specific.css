@@ -1,0 +1,14 @@
+/* Rust-specific styles for ClickPlanet implementation */
+
+/* Add any Rust WebAssembly specific styles here that aren't in the original TS implementation */
+
+/* Application specific layouts and adjustments */
+.about-page {
+    padding: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+    color: #fff;
+    text-align: center;
+}
+
+/* Any WebAssembly/Dioxus specific adjustments */

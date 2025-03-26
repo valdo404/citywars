@@ -1,0 +1,47 @@
+This rust project is a full-stack rust implementation of clickplanet.lol.
+
+it's first objective was to demonstrate how fast rust implementations can be, but it turns out that we in gac had a full fledged clickplante representation that can replace the original one
+
+The original one is here: https://clickplanet.lol/
+
+THe original aim of that project was to take hexagonal cells around the globe.
+
+Now the idea is to do something else and to take cities, using a democratic game based on clicks and virtual majors.
+
+Do this I have designed an osm extractor that does not look so fast. I would like to make it distributed. Maybe it can use some Apache Spark osm implementation.
+
+In the future I would like to have an authentication layer, both for online clients and robots.
+
+Most implementations shoul dbe rust including the frontend (webassembly toolchain) and the backend (hyper, etc). 
+
+At the end of the day, the idea would be to have a full virtual democracy system that would be sold to cities. Or to have a full virtual game where road, coasts, cities and countries could be taken by players.
+
+use git+ssh and never git+https.
+
+Original go+typescript code should never be changed.
+The new implementation should be mostly rust, including 3D code that could use wgpu crate.
+Backend architecture should not be the same as the original one.
+Same for frontend architecture, stick to the rust patterns of this project.
+
+Phasings:
+1. The idea is to have a system that is feature-equivalent to the old Go Code. If it is still not the case, we will evolve until it is feature-aligned.
+2. Add zoom system so that details can be adapted depending on the globe zoom level
+3. If you feel it is working the same and has the exactly same features, and only if testing phase shows that both implementations have the same features, we can move to the next phase: introducing cities.
+
+Frontend testing: 
+1. Use MCP puppeteer-like server for testing. Take screenshots and click on elements using the browser and test frontend code by yourself.
+2. Based on real results, adapt the webassembly implementation until it works.
+
+Development:
+1. Each time you had code, please don't forget to compile
+2. Use dioxius hot reloading
+3. Have a look to latest Crate documentations
+
+And finally: Always use the edit tool. If it does not work, read the file first and work chunks by chunks.
+Make sure we use conventional commits
+Do not use interactive rebase (you are an LLM). If a git MCP server does rebases, use it.
+
+Try to use trunk hot reload. It is does not work, instead of allocating a new port, kill the older trunk instances.
+
+the frontend implementation is here: ./original-frontend
+the backend implementation is here: ./original-backend

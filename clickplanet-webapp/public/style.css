@@ -1,0 +1,8 @@
+/* Main style.css now imports the component-based CSS structure */
+@import url('./styles/index.css');
+@import url('./styles/rust-specific.css');
+
+/* 
+NOTE: All component-specific styles have been moved to dedicated files in the styles/ directory.
+This file now only serves as an entry point that imports all component styles.
+*/

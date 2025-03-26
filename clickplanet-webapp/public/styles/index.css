@@ -1,0 +1,14 @@
+/* Main ClickPlanet CSS - Imports all component styles */
+
+/* Import base styles */
+@import url('./base.css');
+
+/* Import component styles */
+@import url('./DiscordButton.css');
+@import url('./BuyMeACoffee.css');
+@import url('./Modal.css');
+@import url('./CloseButton.css');
+@import url('./SelectWithSearch.css');
+@import url('./About.css');
+@import url('./Leaderboard.css');
+@import url('./Menu.css');

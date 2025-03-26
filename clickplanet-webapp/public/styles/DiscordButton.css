@@ -1,0 +1,21 @@
+.button-discord {
+    padding: 18px;
+    display: flex;
+    justify-content: center;
+    text-decoration: none;
+    background-color: #5865f2;
+    height: 56px;
+}
+
+.button-discord:hover {
+    text-decoration: none;
+    transition: 0.125s ease;
+    background-color: #7289da;
+}
+
+@media only screen and (max-width: 768px) {
+    .button-discord {
+        padding: 16px 8px 0;
+        width: 172px;
+    }
+}
