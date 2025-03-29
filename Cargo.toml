@@ -5,7 +5,7 @@ members = [
     "clickplanet-webapp",
     "clickplanet-proto",
     "clickplanet-robot",
-    "clickplanet-osm-extractor"
+    "clickplanet-osm"
 ]
 resolver = "1"
 
