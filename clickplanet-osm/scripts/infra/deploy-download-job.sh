@@ -36,8 +36,8 @@ echo "Creating Cloud Run job..."
 gcloud beta run jobs create $JOB_NAME \
     --image gcr.io/$PROJECT_ID/$JOB_NAME \
     --tasks 1 \
-    --max-retries 3 \
-    --task-timeout 3600 \
+    --max-retries 1 \
+    --task-timeout 7200 \
     --memory 2Gi \
     --cpu 2 \
     --region $REGION \
@@ -47,17 +47,6 @@ gcloud beta run jobs create $JOB_NAME \
 
 if [ $? -ne 0 ]; then
     echo "Error: Failed to create Cloud Run job"
-    cleanup
-fi
-
-echo "Starting job to download France OSM data..."
-gcloud run jobs execute $JOB_NAME \
-    --region $REGION \
-    --project $PROJECT_ID \
-    --update-env-vars="EXTRACT=france"
-
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to execute Cloud Run job"
     cleanup
 fi
 
