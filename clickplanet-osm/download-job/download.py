@@ -14,24 +14,36 @@ def cleanup_download_resources():
 def get_remote_file_size(url):
     try:
         logger.info(f"Getting file size for {url} using requests")
-        response = requests.head(url, timeout=30)
+        
+        # Try HEAD request first with redirect following
+        logger.debug(f"Trying HEAD request with redirect following")
+        response = requests.head(url, timeout=60, allow_redirects=True)
         
         if response.status_code == 200 and 'Content-Length' in response.headers:
             size = int(response.headers['Content-Length'])
-            logger.info(f"Remote file size: {size/MB:.2f} MB")
+            logger.info(f"Remote file size from HEAD: {size/MB:.2f} MB ({size/GB:.2f} GB)")
             return size
-        else:
-            logger.debug(f"Content-Length header not found in response, falling back to curl")
-            cmd = ["curl", "-sI", url]
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            stdout, stderr = process.communicate()
             
-            if process.returncode == 0:
-                for line in stdout.decode().split('\n'):
-                    if line.lower().startswith('content-length:'):
-                        size = int(line.split(':', 1)[1].strip())
-                        logger.info(f"Remote file size from curl: {size/MB:.2f} MB")
-                        return size
+        headers = {'Range': 'bytes=0-0'}  # Only request the first byte to minimize data transfer
+        response = requests.get(url, headers=headers, timeout=60, allow_redirects=True)
+        
+        if response.status_code == 206 and 'Content-Range' in response.headers:
+            content_range = response.headers['Content-Range']
+            size = int(content_range.split('/')[-1])
+            logger.info(f"Remote file size from Range request: {size/MB:.2f} MB ({size/GB:.2f} GB)")
+            return size
+        
+        logger.debug(f"Range request failed, trying full GET to follow redirects and check final URL")
+        session = requests.Session()
+        response = session.get(url, timeout=60, allow_redirects=True, stream=True)
+        
+        response.close()
+        
+        # Check if the final URL has content length
+        if response.status_code == 200 and 'Content-Length' in response.headers:
+            size = int(response.headers['Content-Length'])
+            logger.info(f"Remote file size from final redirect URL: {size/MB:.2f} MB ({size/GB:.2f} GB)")
+            return size
         
         logger.error(f"Failed to get Content-Length from server for {url}")
         return None
@@ -62,16 +74,15 @@ def download_chunk_to_memory(url, start_byte, end_byte, progress_callback=None):
         headers = {'Range': f'bytes={start_byte}-{end_byte}'}
         logger.debug(f"Requesting byte range: {headers['Range']}")
         
-        with requests.get(url, headers=headers, stream=False, timeout=60) as response:
+        # Use requests with allow_redirects to follow redirects
+        with requests.get(url, headers=headers, stream=False, timeout=60, allow_redirects=True) as response:
             if response.status_code not in (200, 206):
                 error_msg = f"HTTP error: {response.status_code}"
                 logger.error(error_msg)
                 return False, error_msg
             
-            # Get data directly
             data = response.content
             
-            # Call progress callback if provided
             if progress_callback:
                 progress_callback(len(data))
             
