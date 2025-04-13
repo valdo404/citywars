@@ -38,8 +38,8 @@ assembly / assemblyMergeStrategy := {
   case x => MergeStrategy.first
 }
 
-// Set debug level to see shading details
-assembly / logLevel := Level.Debug
+// Use standard log level
+assembly / logLevel := Level.Info
 
 // Don't include Spark libraries in the fat JAR
 assembly / assemblyExcludedJars := {

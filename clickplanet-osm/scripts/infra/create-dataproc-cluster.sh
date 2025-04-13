@@ -1,43 +1,37 @@
 #!/bin/bash
 
-# Dataproc cluster creation script for OSM processing
-# Usage: ./create-dataproc-cluster.sh <cluster-name> <region> <project-id>
+set -x
 
-CLUSTER_NAME=${1:-"osm-processing-cluster"}
-REGION=${2:-"us-central1"}
-PROJECT_ID=${3:-"your-project-id"}
+# Dataproc cluster creation script for OSM processing
+# Usage: ./create-dataproc-cluster.sh <project-id>
+
+CLUSTER_NAME="osm-processing"
+REGION="europe-west1"
+PROJECT_ID=${1:?"Error: PROJECT_ID (arg 1) is required"}
 BUCKET_NAME="gs://${PROJECT_ID}-dataproc"
 
 # Create a Cloud Storage bucket for temporary data
 gsutil mb -l ${REGION} ${BUCKET_NAME} || true
 
-# Create the Dataproc cluster
+# Create the Dataproc cluster with auto zone and spot instances for cost optimization
+echo "Creating a Dataproc cluster for OSM processing with auto zone selection and spot instances..."
 gcloud dataproc clusters create ${CLUSTER_NAME} \
     --project=${PROJECT_ID} \
     --region=${REGION} \
-    --zone=${REGION}-a \
-    --master-machine-type=n2-standard-8 \
-    --master-boot-disk-size=100GB \
-    --num-workers=4 \
-    --worker-machine-type=n2-highmem-16 \
-    --worker-boot-disk-size=100GB \
-    --image-version=2.1 \
-    --properties="spark:spark.dynamicAllocation.enabled=true,\
-spark:spark.dynamicAllocation.initialExecutors=5,\
-spark:spark.dynamicAllocation.minExecutors=5,\
-spark:spark.dynamicAllocation.maxExecutors=20,\
-spark:spark.executor.memory=32g,\
-spark:spark.executor.cores=4,\
-spark:spark.driver.memory=16g,\
-spark:spark.memory.fraction=0.8,\
-spark:spark.memory.storageFraction=0.3,\
-spark:spark.sql.shuffle.partitions=1000,\
-spark:spark.serializer=org.apache.spark.serializer.KryoSerializer,\
-spark:spark.kryoserializer.buffer.max=1g,\
-spark:spark.speculation=true,\
-dataproc:dataproc.conscrypt.provider.enable=false" \
-    --optional-components=JUPYTER \
+    --zone=${REGION}-c \
     --enable-component-gateway \
-    --max-idle="3h" \
-    --scopes=cloud-platform \
-    --labels=purpose=osm-processing
+    --master-machine-type=n1-standard-4 \
+    --master-boot-disk-type=pd-ssd \
+    --master-boot-disk-size=100 \
+    --worker-machine-type=n1-highmem-4 \
+    --worker-boot-disk-type=pd-ssd \
+    --worker-boot-disk-size=100 \
+    --num-workers=2 \
+    --secondary-worker-type=spot \
+    --num-secondary-workers=1 \
+    --secondary-worker-boot-disk-type=pd-ssd \
+    --secondary-worker-boot-disk-size=100 \
+    --image-version=2.2-debian12 \
+    --max-idle="2h" \
+    --labels=purpose=osm-processing,environment=dev \
+    --metadata="OSM_BUCKET=${BUCKET_NAME}"

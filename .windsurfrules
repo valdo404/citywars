@@ -51,7 +51,9 @@ Do not modify production code for testing purposes, use environment variables in
 Pay attention to the environment variables you are using.
 When designing the download/upload script, please take the size of the file in account (70 GB) and the nature of aria2. Which means, we should have enough place on the disk and the memory and we should write concurrently.
 Also please when creating a download volume, think about deleting it after the operation.
-Stick to aria2 and nothing else for downloading. Do not use requests, do not use asyncio, do not use any other library. For uploading stick to gcs library.
 Avoid using download-job/ directory for creating temporary files.
+Do not use memory mount, since we are dealing with a 70 GB file.
 
 Please read the documentation carefully.
+
+Don't put fucking useless comments that are exact duplicates of the code.

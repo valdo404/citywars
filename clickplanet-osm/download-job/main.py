@@ -87,9 +87,18 @@ def transfer_osm_data_to_gcs(extract_name):
         
         logger.info(f"Total file size: {total_size / GB:.2f} GB")
         
-        # Calculate chunks - use 512 MB chunks
-        chunk_size = 256 * MB
-        num_chunks = (total_size + chunk_size - 1) // chunk_size
+        # GCS compose operation has a limit of 32 parts
+        MAX_CHUNKS = 32
+        
+        # Calculate minimum chunk size needed to stay under 32 parts
+        min_chunk_size = (total_size + MAX_CHUNKS - 1) // MAX_CHUNKS
+        # Use at least 256 MB chunks for efficiency
+        chunk_size = max(min_chunk_size, 256 * MB)
+        # Recalculate number of chunks based on the adjusted chunk size
+        num_chunks = min((total_size + chunk_size - 1) // chunk_size, MAX_CHUNKS)
+        
+        logger.info(f"GCS compose has a limit of {MAX_CHUNKS} parts")
+        logger.info(f"Using chunk size of {chunk_size / MB:.0f} MB to ensure no more than {MAX_CHUNKS} parts")
         logger.info(f"Splitting download into {num_chunks} chunks of {chunk_size / MB:.0f} MB each")
         
         downloaded_bytes = 0
