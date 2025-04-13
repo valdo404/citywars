@@ -31,3 +31,23 @@ spark-*
 # System files
 .DS_Store
 */.DS_Store
+
+# IDE
+.vscode/
+.idea_modules/
+*.iml
+*.iws
+
+# Environment and config files
+*.env
+emr-config.json
+log4j.properties
+
+# Temporary data files
+*-urls.tsv
+*-url.txt
+*.pbf
+
+# Local utility scripts
+**/analyze-*.sh
+**/cleanup-*.sh
