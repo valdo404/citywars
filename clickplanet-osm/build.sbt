@@ -4,7 +4,7 @@ version := "0.1.0"
 
 scalaVersion := "2.12.20"
 
-val sparkVersion = "3.1.1"
+val sparkVersion = "3.5.5"
 
 resolvers ++= Seq(
   "Maven Central" at "https://repo1.maven.org/maven2/",
@@ -15,8 +15,9 @@ resolvers ++= Seq(
 libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % sparkVersion,
   "org.apache.spark" %% "spark-sql" % sparkVersion,
-  "com.acervera.osm4scala" %% "osm4scala-core" % "1.0.11",
-  "com.acervera.osm4scala" %% "osm4scala-spark3" % "1.0.11",
+  // Using the regular libraries with shading rules applied
+  "io.github.valdo404" %% "osm4scala-core" % "1.0.11",
+  "io.github.valdo404" %% "osm4scala-spark3" % "1.0.11",
   "org.locationtech.jts" % "jts-core" % "1.18.2",
   "org.postgresql" % "postgresql" % "42.5.4",
   "org.rogach" %% "scallop" % "4.1.0", // Command line parser
@@ -24,11 +25,8 @@ libraryDependencies ++= Seq(
   "ch.qos.logback" % "logback-classic" % "1.2.12"
 )
 
-// Import shader plugin for class relocation
-import sbtassemblyshader.AssemblyShaderPlugin.autoImport._
-
-// Configure class relocation (shading) for protobuf and scalapb
-assemblyShadeRules := Seq(
+// Configure proper shading rules to avoid protobuf conflicts
+ThisBuild / assemblyShadeRules := Seq(
   ShadeRule.rename("com.google.protobuf.**" -> "shaded.com.google.protobuf.@1").inAll,
   ShadeRule.rename("scalapb.**" -> "shaded.scalapb.@1").inAll
 )
@@ -39,6 +37,9 @@ assembly / assemblyMergeStrategy := {
   case "reference.conf" => MergeStrategy.concat
   case x => MergeStrategy.first
 }
+
+// Set debug level to see shading details
+assembly / logLevel := Level.Debug
 
 // Don't include Spark libraries in the fat JAR
 assembly / assemblyExcludedJars := {

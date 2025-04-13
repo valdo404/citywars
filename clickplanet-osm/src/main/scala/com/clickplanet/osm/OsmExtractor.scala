@@ -124,7 +124,7 @@ object OsmExtractor extends LazyLogging {
     val osmDF = spark.read
       .format("osm.pbf")
       .load(osmFilePath)   
-      .persist(StorageLevel.DISK_ONLY)
+      //.persist(StorageLevel.DISK_ONLY)
 
     println("OSM DataFrame Schema:")
     osmDF.printSchema()
@@ -132,52 +132,62 @@ object OsmExtractor extends LazyLogging {
     println("OSM DataFrame Sample:")
     osmDF.show(5)
     
+    // Save OSM data to Parquet format
+    val parquetOutputPath = osmFilePath.replaceAll("\\.osm\\.pbf$", "_osm_data.parquet")
+    println(s"Saving OSM data to Parquet: $parquetOutputPath")
+    
+    osmDF.write
+      .mode("overwrite")
+      .parquet(parquetOutputPath)
+    
+    println("OSM data saved successfully to Parquet format")
+    
     // Analyze tags before extraction
-    println("\nAnalyzing OSM tags...")
+    // println("\nAnalyzing OSM tags...")
     
     // Get distinct tag keys across all elements
-    println("\n=== All Distinct Tag Keys ===")
-    val tagKeysDF = osmDF
-      .select(explode(map_keys(col("tags"))).as("tag_key"))
-      .distinct()
-      .orderBy("tag_key")
+    // println("\n=== All Distinct Tag Keys ===")
+    // val tagKeysDF = osmDF
+    //   .select(explode(map_keys(col("tags"))).as("tag_key"))
+    //   .distinct()
+    //   .orderBy("tag_key")
     
-    tagKeysDF.show(100, false)
-    println(s"Total distinct tag keys: ${tagKeysDF.count()}")
+    // tagKeysDF.show(100, false)
+    // println(s"Total distinct tag keys: ${tagKeysDF.count()}")
     
     // Analyze road tags (Way elements with highway tag)
-    println("\n=== Distinct Road Tag Values (highway) ===")
-    osmDF
-      .filter(col("type") === 1.toByte) // Way type
-      .filter(col("tags.highway").isNotNull)
-      .select(col("tags.highway").as("highway_type"))
-      .distinct()
-      .orderBy("highway_type")
-      .show(100, false)
+    // println("\n=== Distinct Road Tag Values (highway) ===")
+    // osmDF
+    //  .filter(col("type") === 1.toByte) // Way type
+    //   .filter(col("tags.highway").isNotNull)
+    //  .select(col("tags.highway").as("highway_type"))
+    //  .distinct()
+    //  .orderBy("highway_type")
+    //  .show(100, false)
       
     // Analyze city tags (Node elements with place tag)
-    println("\n=== Distinct Place Tag Values ===")
-    osmDF
-      .filter(col("type") === 0.toByte) // Node type
-      .filter(col("tags.place").isNotNull)
-      .select(col("tags.place").as("place_type"))
-      .distinct()
-      .orderBy("place_type")
-      .show(100, false)
+    // println("\n=== Distinct Place Tag Values ===")
+    // osmDF
+    //  .filter(col("type") === 0.toByte) // Node type
+    //  .filter(col("tags.place").isNotNull)
+    //  .select(col("tags.place").as("place_type"))
+    //  .distinct()
+    //  .orderBy("place_type")
+    //  .show(100, false)
     
-    println("\nProceeding with data extraction...")
+    // println("\nProceeding with data extraction...")
     
-    println("Extracting cities...")
-    val citiesDF = extractCities(osmDF) // Explicit repartitioning
-    val cityCount = citiesDF.count()
-    println(s"Saving ${cityCount} cities to database")
-    saveCitiesToDatabase(citiesDF, conf.dbUrl(), conf.dbUser(), conf.dbPassword())
+    // println("Extracting cities...")
+   // val citiesDF = extractCities(osmDF) // Explicit repartitioning
+    // val cityCount = citiesDF.count()
+    // println(s"Saving ${cityCount} cities to database")
+    // saveCitiesToDatabase(citiesDF, conf.dbUrl(), conf.dbUser(), conf.dbPassword())
         
-    println("Extracting roads...")
-    val roadsDF = extractRoads(osmDF) // Explicit repartitioning
-    val roadCount = roadsDF.count()
-    println(s"Saving ${roadCount} roads to database")
-    saveRoadsToDatabase(roadsDF, conf.dbUrl(), conf.dbUser(), conf.dbPassword())
+    // println("Extracting roads...")
+    // val roadsDF = extractRoads(osmDF) // Explicit repartitioning
+    // val roadCount = roadsDF.count()
+    // println(s"Saving ${roadCount} roads to database")
+    //saveRoadsToDatabase(roadsDF, conf.dbUrl(), conf.dbUser(), conf.dbPassword())
   }
   
   /**
