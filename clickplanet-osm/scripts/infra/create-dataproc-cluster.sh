@@ -18,17 +18,22 @@ echo "Creating a Dataproc cluster for OSM processing with auto zone selection an
 gcloud dataproc clusters create ${CLUSTER_NAME} \
     --project=${PROJECT_ID} \
     --region=${REGION} \
-    --zone=${REGION}-c \
+    --zone="" \
     --enable-component-gateway \
-    --master-machine-type=n1-standard-4 \
+    --master-machine-type=n1-highmem-8 \
     --master-boot-disk-type=pd-ssd \
     --master-boot-disk-size=100 \
-    --worker-machine-type=n1-highmem-4 \
+    --worker-machine-type=n1-highmem-8 \
     --worker-boot-disk-type=pd-ssd \
     --worker-boot-disk-size=100 \
     --num-workers=2 \
+    --num-worker-local-ssds=2 \
+    --worker-local-ssd-interface=NVME \
     --secondary-worker-type=spot \
     --num-secondary-workers=1 \
+    --num-secondary-worker-local-ssds=2 \
+    --secondary-worker-local-ssd-interface=NVME \
+    --secondary-worker-machine-types="type=n1-highmem-8,rank=0" \
     --secondary-worker-boot-disk-type=pd-ssd \
     --secondary-worker-boot-disk-size=100 \
     --image-version=2.2-debian12 \
