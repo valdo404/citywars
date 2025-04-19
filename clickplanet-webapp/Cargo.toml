@@ -21,7 +21,7 @@ web-sys = { version = "0.3", features = [
     "WebSocket", "MessageEvent", "CloseEvent", "ErrorEvent", "console",
     "Window", "Document", "Element", "HtmlElement", "Node", "BinaryType",
     "CanvasRenderingContext2d", "HtmlCanvasElement", "MouseEvent", "EventTarget",
-    "EventListener", "Event", "DomRect"] }
+    "EventListener", "Event", "DomRect", "GpuCanvasContext", "Navigator" ] }
 js-sys = "0.3"
 serde-wasm-bindgen = "0.6.5"
 serde.workspace = true
@@ -54,6 +54,10 @@ dioxus-hooks = "0.6.2"
 dioxus-router = "0.6.3"
 console_log = "1.0.0"
 log = "0.4.21"
+
+wgpu = { version = "25.0.0", features = ["webgl", "webgpu", "wgsl"], default-features = false }
+bytemuck = { version = "1.14", features = ["derive"] }
+raw-window-handle = "0.6.0"
 
 # Enable/disable features based on target
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
