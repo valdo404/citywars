@@ -6,6 +6,7 @@ node_modules
 data/redis/*
 data/nats/config/*
 data/nats/jetstream/*
+data/
 
 # Build artifacts
 *.log
@@ -13,6 +14,40 @@ build_log.txt
 clickplanet-webapp/build_log.txt
 clickplanet-webapp/dist/
 
+# Scala/SBT specific
+.bloop/
+.metals/
+.bsp/
+project/.bloop/
+project/project/.bloop/
+project/project/project/
+project/metals.sbt
+project/project/metals.sbt
+project/project/project/metals.sbt
+
+# Spark distribution
+spark-*
+
 # System files
 .DS_Store
 */.DS_Store
+
+# IDE
+.vscode/
+.idea_modules/
+*.iml
+*.iws
+
+# Environment and config files
+*.env
+emr-config.json
+log4j.properties
+
+# Temporary data files
+*-urls.tsv
+*-url.txt
+*.pbf
+
+# Local utility scripts
+**/analyze-*.sh
+**/cleanup-*.sh

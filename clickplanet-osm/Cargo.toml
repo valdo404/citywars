@@ -1,8 +1,8 @@
 [package]
-name = "clickplanet-osm-extractor"
+name = "clickplanet-osm"
 version = "0.1.0"
 edition = "2021"
-description = "OSM Extractor implementation for ClickPlanet game"
+description = "OSM implementation for ClickPlanet game"
 license = "MIT"
 
 [dependencies]
@@ -25,5 +25,5 @@ tracing-log = "0.2.0"
 tokio-stream = "0.1.17"
 
 [[bin]]
-name = "osm-extractor"
+name = "clickplanet-osm"
 path = "src/osm_extractor.rs"

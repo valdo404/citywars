@@ -15,7 +15,7 @@ COPY clickplanet-robot/ ./clickplanet-robot/
 COPY clickplanet-server/ ./clickplanet-server/
 COPY clickplanet-proto/ ./clickplanet-proto/
 COPY clickplanet-webapp/ ./clickplanet-webapp/
-COPY clickplanet-osm-extractor/ ./clickplanet-osm-extractor/
+COPY clickplanet-osm/ ./clickplanet-osm/
 
 RUN cargo build --release --bin country-watchguard
 
