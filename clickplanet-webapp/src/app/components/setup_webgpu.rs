@@ -2,13 +2,15 @@ use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 use wgpu::SurfaceTarget;
 use wgpu::util::DeviceExt;
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Quat};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::f32::consts::PI;
 use log::{info, debug, error};
+use dioxus::prelude::*;
+use wasm_bindgen_futures::spawn_local;
 
-use crate::app::components::create_sphere::Vertex;
+use crate::app::components::create_sphere::{Vertex, create_sphere};
 
 /// Uniform buffer data for transformations
 #[repr(C)]
@@ -17,8 +19,27 @@ pub struct Uniforms {
     pub mvp: [[f32; 4]; 4],
 }
 
+/// Create a signal-based animation state for the globe
+pub fn use_animation_state() -> Signal<f32> {
+    let rotation = use_signal(|| 0.0f32);
+    
+    use_effect(move || {
+        let mut rotation_state = rotation.clone();
+        spawn_local(async move {
+            loop {
+                // Update rotation (in radians)
+                rotation_state.set(rotation_state() + 0.005);
+                // Yield to browser to avoid blocking the main thread
+                gloo_timers::future::TimeoutFuture::new(16).await; // ~60fps
+            }
+        });
+    });
+    
+    rotation
+}
+
 /// Set up WebGPU and start the rendering loop
-pub async fn setup_webgpu(canvas: HtmlCanvasElement) {
+pub async fn setup_webgpu(canvas: HtmlCanvasElement, rotation: Signal<f32>) {
     info!("Setting up WebGPU for globe rendering");
     let width = canvas.client_width() as u32;
     let height = canvas.client_height() as u32;
@@ -56,6 +77,8 @@ pub async fn setup_webgpu(canvas: HtmlCanvasElement) {
             trace: wgpu::Trace::default(),
         }
     ).await.expect("Failed to create device");
+    
+    info!("Created device and queue");
         
     // Get preferred format
     let capabilities = surface.get_capabilities(&adapter);
@@ -74,10 +97,8 @@ pub async fn setup_webgpu(canvas: HtmlCanvasElement) {
     };
     surface.configure(&device, &config);
         
-    // Create sphere mesh
-    // let (vertices, indices) = create_sphere(1.0, 32, 32);
-    let vertices: Vec<Vertex> = Vec::new();
-    let indices: Vec<u32> = Vec::new();
+    // Create Earth sphere mesh with proper dimensions
+    let (vertices, indices) = create_sphere(1.0, 64, 128);
         
     // Create vertex buffer
     let vertex_buffer = device.create_buffer_init(
@@ -87,7 +108,7 @@ pub async fn setup_webgpu(canvas: HtmlCanvasElement) {
             usage: wgpu::BufferUsages::VERTEX,
         }
     );
-        
+    
     // Create index buffer
     let index_buffer = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
@@ -96,20 +117,23 @@ pub async fn setup_webgpu(canvas: HtmlCanvasElement) {
             usage: wgpu::BufferUsages::INDEX,
         }
     );
+    
     let num_indices = indices.len() as u32;
+    
+    info!("Created mesh with {} vertices and {} indices", vertices.len(), indices.len());
         
-    // Create uniform buffer for MVP matrix
+    // Create uniform buffer
     let uniform_buffer = device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[
-                Uniforms {
-                    mvp: Mat4::IDENTITY.to_cols_array_2d(),
-                }
-            ]),
+            contents: bytemuck::cast_slice(&[Uniforms {
+                mvp: Mat4::IDENTITY.to_cols_array_2d(),
+            }]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         }
     );
+    
+    info!("Created uniform buffer");
         
     // Create bind group layout
     let bind_group_layout = device.create_bind_group_layout(
@@ -173,10 +197,7 @@ pub async fn setup_webgpu(canvas: HtmlCanvasElement) {
                     wgpu::VertexBufferLayout {
                         array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
                         step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![
-                            0 => Float32x3, // position
-                            1 => Float32x3, // normal
-                        ],
+                        attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3],
                     },
                 ],
             },
@@ -185,7 +206,7 @@ pub async fn setup_webgpu(canvas: HtmlCanvasElement) {
                 entry_point: Some("fs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
+                    format: surface_format,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -195,11 +216,17 @@ pub async fn setup_webgpu(canvas: HtmlCanvasElement) {
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
-                unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth24Plus,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -208,89 +235,116 @@ pub async fn setup_webgpu(canvas: HtmlCanvasElement) {
             multiview: None,
         }
     );
-        
-    // Animation loop variables
-    /*let animation = Rc::new(RefCell::new(None));
-    let animation_clone = animation.clone();
     
-    // Define the animation function
-    *animation.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-        // Update the rotation
-        let now = web_sys::window().unwrap().performance().unwrap().now();
-        let rotation = now / 2000.0; // Full rotation every 2 seconds
+    info!("Created render pipeline");
         
-        // Update MVP matrix - here we're just rotating around Y axis
-        let mvp = {
-            let model = Mat4::from_rotation_y(rotation as f32);
-            let view = Mat4::look_at_rh(
-                Vec3::new(0.0, 0.0, 2.5), // Eye position
-                Vec3::new(0.0, 0.0, 0.0), // Look at center
-                Vec3::new(0.0, 1.0, 0.0), // Up direction
-            );
-            let proj = Mat4::perspective_rh(
-                PI / 4.0,                 // FOV
-                width as f32 / height as f32, // Aspect ratio
-                0.1,                      // Near plane
-                10.0,                     // Far plane
-            );
-            (proj * view * model).to_cols_array_2d()
-        };
-        
-        // Update uniform buffer
-        let uniforms = Uniforms { mvp };
-        queue.write_buffer(&uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
-        
-        // Render frame
-        match surface.get_current_texture() {
-            Ok(frame) => {
-                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-                {
-                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("Render Pass"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color {
-                                    r: 0.0,
-                                    g: 0.0,
-                                    b: 0.1,
-                                    a: 1.0,
-                                }),
-                                store: wgpu::StoreOp::Store,
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                        occlusion_query_set: None,
-                        timestamp_writes: None,
-                    });
-                    
-                    render_pass.set_pipeline(&render_pipeline);
-                    render_pass.set_bind_group(0, &bind_group, &[]);
-                    render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                    render_pass.draw_indexed(0..num_indices, 0, 0..1);
-                }
-                
-                queue.submit(Some(encoder.finish()));
-                frame.present();
-            }
-            Err(e) => {
-                error!("Failed to get current texture: {:?}", e);
-            }
-        }
-        
-        // Request next frame
-        web_sys::window()
-            .unwrap()
-            .request_animation_frame(animation_clone.borrow().as_ref().unwrap().as_ref().unchecked_ref())
-            .unwrap();
-    }) as Box<dyn FnMut()>));
+    // Create depth texture
+    let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("Depth Texture"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Depth24Plus,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    
+    let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
     
     // Start animation loop
-    web_sys::window()
-        .unwrap()
-        .request_animation_frame(animation_clone.borrow().as_ref().unwrap().as_ref().unchecked_ref())
-        .unwrap();*/
+    spawn_local(async move {
+        loop {
+            // Get current rotation
+            let current_rotation = rotation();
+            
+            // Create model-view-projection matrix
+            let model = Mat4::from_rotation_y(current_rotation);
+            let view = Mat4::look_at_rh(
+                Vec3::new(0.0, 0.0, 3.0),  // Camera position
+                Vec3::new(0.0, 0.0, 0.0),  // Look at center
+                Vec3::new(0.0, 1.0, 0.0),  // Up vector
+            );
+            let aspect = width as f32 / height as f32;
+            let proj = Mat4::perspective_rh(45.0f32.to_radians(), aspect, 0.1, 100.0);
+            
+            let mvp = proj * view * model;
+            
+            // Update uniform buffer
+            queue.write_buffer(
+                &uniform_buffer,
+                0,
+                bytemuck::cast_slice(&[Uniforms {
+                    mvp: mvp.to_cols_array_2d(),
+                }]),
+            );
+            
+            // Get a frame
+            match surface.get_current_texture() {
+                Ok(frame) => {
+                    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                    
+                    // Create command encoder
+                    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("Render Encoder"),
+                    });
+                    
+                    // Create render pass
+                    {
+                        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                            label: Some("Main Render Pass"),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                                        r: 0.05, 
+                                        g: 0.1, 
+                                        b: 0.2, 
+                                        a: 1.0,
+                                    }),
+                                    store: wgpu::StoreOp::Store,
+                                },
+                            })],
+                            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                                view: &depth_view,
+                                depth_ops: Some(wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(1.0),
+                                    store: wgpu::StoreOp::Store,
+                                }),
+                                stencil_ops: None,
+                            }),
+                            occlusion_query_set: None,
+                            timestamp_writes: None,
+                        });
+                        
+                        // Set pipeline and bind groups
+                        render_pass.set_pipeline(&render_pipeline);
+                        render_pass.set_bind_group(0, &bind_group, &[]);
+                        render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                        render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                        
+                        // Draw the sphere
+                        render_pass.draw_indexed(0..num_indices, 0, 0..1);
+                    }
+                    
+                    // Submit commands
+                    queue.submit(std::iter::once(encoder.finish()));
+                    frame.present();
+                },
+                Err(e) => {
+                    error!("Failed to get current texture: {:?}", e);
+                }
+            }
+            
+            // Yield to browser to avoid blocking the main thread
+            gloo_timers::future::TimeoutFuture::new(16).await; // ~60fps
+        }
+    });
+    
+    info!("Started animation loop");
 }
