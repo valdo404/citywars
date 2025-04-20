@@ -51,3 +51,13 @@ log4j.properties
 # Local utility scripts
 **/analyze-*.sh
 **/cleanup-*.sh
+
+# ignore boa history
+.boa_history
+# ignore Python bytecode and cache dirs
+*.pyc
+__pycache__/
+# ignore Metals build files
+metals.sbt
+# ignore npm lock file
+package-lock.json
