@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+
 use crate::app::countries::Country;
 
 // Structure to store leaderboard entry data matching the TypeScript implementation
@@ -19,11 +20,11 @@ pub struct LeaderboardProps {
 
 // Component for displaying the leaderboard
 #[component]
-pub fn Leaderboard() -> Element {
+pub fn Leaderboard(props: LeaderboardProps) -> Element {
     let mut is_open = use_signal(|| true);
     
     // Total number of tiles in the globe - matches the default in the TypeScript implementation
-    let total_tiles = 120000; // This would come from props.tiles_count in a real implementation
+    let total_tiles = props.tiles_count; // This would come from props.tiles_count in a real implementation
     
     // In a full implementation, this would be fetched from an API
     let entries = use_signal(|| {
@@ -78,13 +79,15 @@ pub fn Leaderboard() -> Element {
     let toggle_leaderboard = move |_| {
         is_open.set(!is_open());
     };
+    
+    let folder = asset!("public/static");
 
     rsx! {
         div { class: "leaderboard",
             div { class: "leaderboard-header",
                 img {
                     alt: "ClickPlanet logo",
-                    src: "/public/static/favicon.png",
+                    src: format!("{folder}/favicon.png"),
                     width: "56px",
                     height: "56px"
                 }
@@ -129,8 +132,8 @@ pub fn Leaderboard() -> Element {
                                         td { colspan: "3", 
                                             img { 
                                                 class: "country-flag",
-                                                src: "/public/static/countries/svg/{entry.country.code.to_lowercase()}.svg",
-                                                alt: "{entry.country.name} flag",
+                                                src: format!("{folder}/countries/svg/{}.svg", entry.country.code.to_lowercase()),
+                                                alt: entry.country.name.as_str(),
                                                 width: "20px",
                                                 height: "auto",
                                                 style: "margin-right: 8px;"

@@ -3,7 +3,7 @@ use log::{debug, error, info};
 use web_sys::HtmlCanvasElement;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures;
-use crate::app::components::setup_webgpu::{setup_webgpu, use_animation_state};
+use crate::app::components::earth::setup_webgpu::{setup_scene, use_animation_state};
 
 #[component]
 pub fn globe() -> Element {
@@ -18,7 +18,7 @@ pub fn globe() -> Element {
             if let Some(canvas) = canvas_ref.read().clone() {
                 info!("Canvas found - initializing WebGPU Earth rendering");
                 // Hand off to setup_webgpu for real initialization with animation signal
-                setup_webgpu(canvas, rotation).await;
+                setup_scene(canvas, rotation).await;
             } else {
                 error!("No canvas found for globe rendering");
             }

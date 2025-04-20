@@ -40,6 +40,8 @@ pub fn Settings(props: SettingsProps) -> Element {
         CountryValue { code: "gb".to_string(), name: "United Kingdom".to_string() },
     ];
     
+    let folder = asset!("public/static");
+
     rsx! {
         ModalManager {
             open_by_default: false,
@@ -47,7 +49,7 @@ pub fn Settings(props: SettingsProps) -> Element {
             button_props: BlockButtonProps {
                 on_click: Callback::new(|_| {}),
                 text: country.name.clone(),
-                image_url: format!("/static/countries/svg/{}.svg", country.code.to_lowercase()),
+                image_url: format!("{}/countries/svg/{}.svg", folder, country.code.to_lowercase()),
                 class_name: Some("button-settings".to_string()),
             },
             close_button_text: None,

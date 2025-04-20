@@ -5,13 +5,12 @@ use std::sync::{Arc, Mutex};
 use crate::backends::backend::{Ownerships, OwnershipsGetter, TileClicker, Update, UpdatesListener};
 use anyhow::Result;
 use base64::engine::general_purpose;
-use clickplanet_proto::clicks::{BatchRequest, ClickRequest, OwnershipState};
+use clickplanet_proto::clicks::ClickRequest;
 use prost::Message;
 use uuid::Uuid;
 
 // WebAssembly compatible imports
 use gloo_net::http::Request;
-use gloo::timers::callback::Timeout;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{MessageEvent, WebSocket};

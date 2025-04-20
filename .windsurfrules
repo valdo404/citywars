@@ -46,14 +46,9 @@ Try to use trunk hot reload. It is does not work, instead of allocating a new po
 the frontend implementation is here: ./original-frontend
 the backend implementation is here: ./original-backend
 
-The download/upload script should use the bucket that is listed in the gcloud storage ls command.
-Do not modify production code for testing purposes, use environment variables instead.
 Pay attention to the environment variables you are using.
-When designing the download/upload script, please take the size of the file in account (70 GB) and the nature of aria2. Which means, we should have enough place on the disk and the memory and we should write concurrently.
-Also please when creating a download volume, think about deleting it after the operation.
-Avoid using download-job/ directory for creating temporary files.
-Do not use memory mount, since we are dealing with a 70 GB file.
-
 Please read the documentation carefully.
 
 Don't put fucking useless comments that are exact duplicates of the code.
+
+Briefly explain what you are doing instead of just calling the tools.

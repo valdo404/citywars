@@ -1,33 +1,13 @@
 use dioxus::prelude::*;
-use dioxus_web::launch;
-use std::cell::RefCell;
+use dioxus::document::Stylesheet;
 use crate::app::countries::Country;
 
-mod app {
-    pub mod components {
-        pub mod buy_me_a_coffee;
-        pub mod block_button;
-        pub mod close_button;
-        pub mod discord_button;
-        pub mod modal;
-        pub mod modal_manager;
-        pub mod on_load_modal;
-        pub mod select_with_search;
-        pub mod globe;
-        pub mod settings;
-        pub mod leaderboard;
-        pub mod about;
-    }
-    pub mod countries;
-    pub mod viewer;
-}
-
+mod app;
 mod backends;
 
 fn main() {
     console_log::init_with_level(log::Level::Debug).expect("Unable to initialize console_log");
     
-    // Launch the web application
     launch(App);
 
 }
@@ -40,70 +20,27 @@ enum Route {
     About {},
 }
 
-// App component takes no props now
-// Commented out for now to fix compilation issues
-/*
-// Define a custom Link component for navigation
-#[component]
-fn Link(to: Route, children: Element) -> Element {
-    let onclick = move |_| {
-        APP_STATE.with(|state| {
-            if let Some(nav_fn) = state.navigate.borrow().as_ref() {
-                nav_fn(to.clone())
-            }
-        });
-    };
-    
-    rsx! {
-        button {
-            class: "link-button",
-            onclick: onclick,
-            {children}
-        }
-    }
-}
 
-// A simple state holder for app-wide state
-thread_local! {
-    static APP_STATE: AppState = AppState::new();
-}
-
-struct AppState {
-    navigate: RefCell<Option<Box<dyn Fn(Route) + 'static>>>,
-}
-
-impl AppState {
-    fn new() -> Self {
-        Self {
-            navigate: RefCell::new(None),
-        }
-    }
-}
-*/
-
-// Updated for Dioxus 0.6.x compatibility
 fn App() -> Element {
     let mut current_route = use_signal(|| Route::Home {});
     
-    let mut navigate = move |route: Route| {
+    let navigate = move |route: Route| {
         current_route.set(route);
     };
     
-    // Commented out for now to fix compilation issues
-    /*
-    // Store the navigation function in the app state for Link components
-    use_effect(move || {
-        APP_STATE.with(|state| {
-            *state.navigate.borrow_mut() = Some(Box::new(navigate.clone()));
-        });
-        || {}
-    });
-    */
-    
     rsx! {
-        // Simplified to match original implementation without navigation bar
+        document::Link { rel: "icon", href: asset!("public/static/favicon.png") }
+        Stylesheet { href: asset!("public/styles/base.css") }
+        Stylesheet { href: asset!("public/styles/DiscordButton.css") }
+        Stylesheet { href: asset!("public/styles/BuyMeACoffee.css") }
+        Stylesheet { href: asset!("public/styles/Modal.css") }
+        Stylesheet { href: asset!("public/styles/CloseButton.css") }
+        Stylesheet { href: asset!("public/styles/SelectWithSearch.css") }
+        Stylesheet { href: asset!("public/styles/About.css") }
+        Stylesheet { href: asset!("public/styles/Leaderboard.css") }
+        Stylesheet { href: asset!("public/styles/Menu.css") }
+        Stylesheet { href: asset!("public/styles/rust-specific.css") }
         div { class: "content",
-            // Always show the HomeScreen as the original implementation does
             match current_route() {
                 Route::Home {} => rsx! { HomeScreen {} },
                 Route::About {} => rsx! { AboutScreen {} },
@@ -129,7 +66,6 @@ fn HomeScreen() -> Element {
     
     rsx! {
         div { class: "container",
-            // Conditionally render the welcome modal
             if show_welcome_modal() {
                 app::components::on_load_modal::OnLoadModal {
                     title: "Dear earthlings".to_string(),
@@ -138,7 +74,7 @@ fn HomeScreen() -> Element {
                         div { class: "center-align",
                             img {
                                 alt: "ClickPlanet logo",
-                                src: "/static/logo.svg",
+                                src: asset!("public/static/logo.svg"),
                                 width: "64px",
                                 height: "auto"
                             }
@@ -154,10 +90,8 @@ fn HomeScreen() -> Element {
                 }
             }
             
-            // Main globe container
-            app::components::globe::GlobeMock {}
+            app::components::earth::globe::globe {}
             
-            // Menu with leaderboard and settings
             div { class: "menu",
                 app::components::leaderboard::Leaderboard {}
                 div { class: "menu-actions",
@@ -175,15 +109,12 @@ fn HomeScreen() -> Element {
     }
 }
 
-// Updated for Dioxus 0.6.x compatibility
 fn AboutScreen() -> Element {
     rsx! {
         div { class: "about-page",
             h1 { "About ClickPlanet" }
             p { "ClickPlanet is a real-time collaborative globe where players from around the world can claim hexagonal territories for their countries." }
             p { "This is a Rust/WebAssembly implementation of the original ClickPlanet game." }
-            // Link component commented out until fixed
-            // Link { to: Route::Home {}, "Return to the globe" }
             button { 
                 onclick: move |_| {
                     // Manual navigation logic

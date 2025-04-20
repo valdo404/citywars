@@ -21,7 +21,7 @@ pub fn BlockButton(props: BlockButtonProps) -> Element {
             onclick: move |evt| props.on_click.call(evt), // Call the callback
             if !props.image_url.is_empty() {
                 img {
-                    src: format!("/public{}", props.image_url),
+                    src: props.image_url,
                     alt: props.text.clone(),
                     class: "button-icon",
                     style: "margin-right: 8px; width: 20px; height: 20px;"

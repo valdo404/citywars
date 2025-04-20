@@ -27,5 +27,6 @@ serde_json.workspace = true
 tokio-retry.workspace = true
 futures-util = "0.3.31"
 rayon = "1.10.0"
+imp = "0.1.0"
 
 # Additional dependencies specific to client

@@ -12,7 +12,7 @@ pub fn About() -> Element {
             button_props: BlockButtonProps {
                 on_click: Callback::new(|_| {}),
                 text: "About".to_string(),
-                image_url: "/static/favicon.png".to_string(),
+                image_url: asset!("public/static/favicon.png").to_string(),
                 class_name: Some("button-about".to_string()),
             },
             close_button_text: Some("Back".to_string()),

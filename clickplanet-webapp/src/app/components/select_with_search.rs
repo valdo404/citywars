@@ -1,6 +1,4 @@
 use dioxus::prelude::*;
-use std::rc::Rc;
-use dioxus::logger::tracing::event;
 
 /// Convert a country code (e.g., "us") to a flag emoji (e.g., "🇺🇸")
 fn get_flag_emoji(country_code: &str) -> String {
