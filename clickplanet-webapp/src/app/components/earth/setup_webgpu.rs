@@ -172,8 +172,12 @@ async fn create_render_pipeline(
             },
         ],
     });
-    // Load and downscale earth image to fit device limits
-    let mut img = image::load_from_memory(include_bytes!("../../../../public/static/earth/3_no_ice_clouds_16k.jpg")).expect("Failed to load earth image");
+    // Fetch and downscale earth image via asset API
+    let image_url = format!("{}/earth/3_no_ice_clouds_16k.jpg", env!("CITYWARS_STATIC_SITE"));
+    let resp = Request::get(&image_url)
+        .send().await.expect("Failed to fetch earth image");
+    let data = resp.binary().await.expect("Failed to read earth image bytes");
+    let mut img = image::load_from_memory(&data).expect("Failed to decode earth image");
     let max_dim = device.limits().max_texture_dimension_2d;
     let (w, h) = img.dimensions();
     if w > max_dim || h > max_dim {

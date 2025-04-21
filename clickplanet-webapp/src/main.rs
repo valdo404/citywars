@@ -74,7 +74,7 @@ fn HomeScreen() -> Element {
                         div { class: "center-align",
                             img {
                                 alt: "ClickPlanet logo",
-                                src: asset!("public/static/logo.svg"),
+                                src: format!("{}/favicon.png", env!("CITYWARS_STATIC_SITE")),
                                 width: "64px",
                                 height: "auto"
                             }

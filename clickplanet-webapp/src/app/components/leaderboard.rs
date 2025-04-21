@@ -18,15 +18,12 @@ pub struct LeaderboardProps {
     pub tiles_count: u32,
 }
 
-// Component for displaying the leaderboard
 #[component]
 pub fn Leaderboard(props: LeaderboardProps) -> Element {
     let mut is_open = use_signal(|| true);
     
-    // Total number of tiles in the globe - matches the default in the TypeScript implementation
-    let total_tiles = props.tiles_count; // This would come from props.tiles_count in a real implementation
+    let total_tiles = props.tiles_count;
     
-    // In a full implementation, this would be fetched from an API
     let entries = use_signal(|| {
         let mut mock_data = vec![
             LeaderboardEntry {
@@ -80,14 +77,12 @@ pub fn Leaderboard(props: LeaderboardProps) -> Element {
         is_open.set(!is_open());
     };
     
-    let folder = asset!("public/static");
-
     rsx! {
         div { class: "leaderboard",
             div { class: "leaderboard-header",
                 img {
                     alt: "ClickPlanet logo",
-                    src: format!("{folder}/favicon.png"),
+                    src: format!("{}/favicon.png", env!("CITYWARS_STATIC_SITE")),
                     width: "56px",
                     height: "56px"
                 }
@@ -132,7 +127,7 @@ pub fn Leaderboard(props: LeaderboardProps) -> Element {
                                         td { colspan: "3", 
                                             img { 
                                                 class: "country-flag",
-                                                src: format!("{folder}/countries/svg/{}.svg", entry.country.code.to_lowercase()),
+                                                src: format!("{}/countries/svg/{}.svg", env!("CITYWARS_STATIC_SITE"), entry.country.code.to_lowercase()),
                                                 alt: entry.country.name.as_str(),
                                                 width: "20px",
                                                 height: "auto",

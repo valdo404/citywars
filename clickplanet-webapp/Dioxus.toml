@@ -12,19 +12,9 @@ script = []
 
 [web.resource]
 script = []
-[[web.resource.copy-dir]]
-src = "public/static"
-dest = "static"
-[[web.resource.copy-dir]]
-src = "public/styles"
-dest = "styles"
 
 [web.resource.dev]
 script = []
 
-[[web.resource.dev.copy-dir]]
-src = "public/static"
-dest = "static"
-[[web.resource.dev.copy-dir]]
-src = "public/styles"
-dest = "styles"
+level = "z"
+debug = false
