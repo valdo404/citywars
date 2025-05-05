@@ -24,6 +24,14 @@ pub fn init_globe(canvas_id: &str) -> Result<(), JsError> {
     let static_site = env!("CITYWARS_STATIC_SITE");
     let window = web_sys::window().ok_or_else(|| JsError::new("No window found"))?;
     
+    // Check if THREE object is available in the global scope
+    let three_available = js_sys::Reflect::has(&window, &JsValue::from_str("THREE"))
+        .map_err(|_| JsError::new("Failed to check for THREE global object"))?;
+    
+    if !three_available {
+        return Err(JsError::new("THREE global object not found. Make sure Three.js is loaded properly."));
+    }
+    
     // Set the static site URL directly on the window object
     js_sys::Reflect::set(
         &window,

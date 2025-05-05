@@ -16,6 +16,9 @@ extern "C" {
 
     #[wasm_bindgen(js_namespace = THREE)]
     pub type Object3D;
+    
+    #[wasm_bindgen(method, getter, js_namespace = THREE)]
+    pub fn rotation(this: &Object3D) -> Euler;
 
     #[wasm_bindgen(extends = Object3D, js_namespace = THREE)]
     pub type Mesh;
@@ -38,11 +41,22 @@ extern "C" {
     #[wasm_bindgen(method, getter, js_namespace = THREE)]
     pub fn domElement(this: &WebGLRenderer) -> Element;
 
+    // Generic render method that can handle any camera type by using JsValue
     #[wasm_bindgen(method, js_namespace = THREE, js_name = render)]
-    pub fn render(this: &WebGLRenderer, scene: &Scene, camera: &OrthographicCamera);
+    pub fn render(this: &WebGLRenderer, scene: &Scene, camera: &JsValue);
 
     #[wasm_bindgen(method, js_namespace = THREE, js_name = dispose)]
     pub fn dispose(this: &WebGLRenderer);
+    
+    // PerspectiveCamera for the cube example
+    #[wasm_bindgen(extends = Object3D, js_namespace = THREE)]
+    pub type PerspectiveCamera;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new(fov: f64, aspect: f64, near: f64, far: f64) -> PerspectiveCamera;
+    
+    #[wasm_bindgen(method, getter, js_namespace = THREE, js_name = position)]
+    pub fn position(this: &PerspectiveCamera) -> Vector3;
 
     #[wasm_bindgen(extends = Object3D, js_namespace = THREE)]
     pub type OrthographicCamera;
@@ -71,17 +85,33 @@ extern "C" {
     #[wasm_bindgen(constructor, js_namespace = THREE)]
     pub fn new(color: u32, intensity: f64) -> AmbientLight;
 
+    // Base BufferGeometry type
     #[wasm_bindgen(js_namespace = THREE)]
     pub type BufferGeometry;
+    
+    // BoxGeometry extends BufferGeometry
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type BoxGeometry;
+    
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new(width: f64, height: f64, depth: f64) -> BoxGeometry;
 
     #[wasm_bindgen(js_namespace = THREE)]
     pub type IcosahedronGeometry;
 
     #[wasm_bindgen(constructor, js_namespace = THREE)]
     pub fn new(radius: f64, detail: u32) -> IcosahedronGeometry;
-
+    
+    // Base Material type
     #[wasm_bindgen(js_namespace = THREE)]
     pub type Material;
+    
+    // MeshBasicMaterial extends Material
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type MeshBasicMaterial;
+    
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new_with_params(params: &JsValue) -> MeshBasicMaterial;
 
     #[wasm_bindgen(js_namespace = THREE)]
     pub type MeshStandardMaterial;
@@ -100,6 +130,22 @@ extern "C" {
 
     #[wasm_bindgen(method, js_namespace = THREE, js_name = load)]
     pub fn load(this: &TextureLoader, url: &str) -> Texture;
+    
+    // Euler for rotation
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type Euler;
+    
+    #[wasm_bindgen(method, getter, js_namespace = THREE)]
+    pub fn x(this: &Euler) -> f64;
+    
+    #[wasm_bindgen(method, getter, js_namespace = THREE)]
+    pub fn y(this: &Euler) -> f64;
+    
+    #[wasm_bindgen(method, setter, js_namespace = THREE)]
+    pub fn set_x(this: &Euler, x: f64);
+    
+    #[wasm_bindgen(method, setter, js_namespace = THREE)]
+    pub fn set_y(this: &Euler, y: f64);
 
     #[wasm_bindgen(js_namespace = THREE)]
     pub type Vector3;
@@ -116,6 +162,58 @@ extern "C" {
     #[wasm_bindgen(constructor, js_namespace = THREE)]
     pub fn new(x: f64, y: f64) -> Vector2;
 
+}
+
+// Function to check if Three.js is available in the global scope
+pub fn is_three_available() -> bool {
+    use wasm_bindgen::prelude::*;
+    use web_sys::console;
+    
+    // Try to access the THREE global object via window
+    console::log_1(&JsValue::from_str("Checking for THREE global object..."));
+    
+    if let Some(window) = web_sys::window() {
+        // Log all available global objects for debugging
+        if let Ok(keys) = js_sys::Reflect::own_keys(&window) {
+            console::log_2(
+                &JsValue::from_str("Window global objects available:"),
+                &keys
+            );
+        }
+        
+        // Check if THREE is directly available on window
+        if js_sys::Reflect::has(&window, &JsValue::from_str("THREE")).unwrap_or(false) {
+            console::log_1(&JsValue::from_str("THREE found directly on window object!"));
+            return true;
+        }
+        
+        // Try the eval approach as a backup
+        let eval_script = r#"(function() { 
+            try { 
+                if (typeof THREE !== 'undefined') {
+                    console.log('THREE found with type:', typeof THREE);
+                    console.log('THREE version:', THREE.REVISION || 'unknown');
+                    return true; 
+                } else {
+                    console.log('THREE is undefined in global scope');
+                    return false;
+                }
+            } catch(err) {
+                console.error('Error checking THREE:', err);
+                return false;
+            }
+        })()
+        "#;
+        
+        // Execute the evaluation script
+        if let Ok(result) = js_sys::eval(eval_script) {
+            console::log_1(&JsValue::from_str(&format!("THREE availability check result: {}", result.is_truthy())));
+            return result.is_truthy();
+        }
+    }
+    
+    console::log_1(&JsValue::from_str("Failed to check THREE availability"));
+    false
 }
 
 // OrbitControls bindings - using standard imports
