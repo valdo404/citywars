@@ -1,4 +1,3 @@
-use log::info;
 
 /// Validates WGSL shader code by attempting to compile it
 #[cfg(test)]

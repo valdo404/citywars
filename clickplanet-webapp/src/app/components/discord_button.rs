@@ -8,6 +8,7 @@ pub struct DiscordButtonProps {
 }
 
 // Updated for Dioxus 0.6.x compatibility
+#[allow(non_snake_case)]
 pub fn DiscordButton(props: DiscordButtonProps) -> Element {
     let message = props
         .message

@@ -4,9 +4,8 @@ use wgpu::SurfaceTarget;
 use glam::Mat4;
 use log::{debug, info};
 use dioxus::prelude::*;
-use bytemuck::{Pod, Zeroable, cast_slice};
 use wasm_bindgen_futures::spawn_local;
-use gloo_timers::future::TimeoutFuture;
+use gloo_net::http::Request;
 use image::{GenericImageView, imageops::FilterType};
 
 use crate::app::components::earth::create_sphere::{Vertex, create_sphere};
@@ -17,11 +16,13 @@ use crate::app::components::earth::shader_validation::validate_shader_code;
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[allow(dead_code)]
 pub struct Uniforms {
     pub mvp: [[f32; 4]; 4],
 }
 
 /// WebGPU rendering context containing all necessary components
+#[allow(dead_code)]
 pub struct WebGpuContext {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -37,6 +38,7 @@ pub struct WebGpuContext {
 }
 
 /// Create a signal-based animation state for the globe
+#[allow(dead_code)]
 pub fn use_animation_state() -> Signal<f32> {
     let rotation = use_signal(|| 0.0f32);
     
@@ -56,6 +58,7 @@ pub fn use_animation_state() -> Signal<f32> {
 }
 
 /// Set up WebGPU and start the rendering loop
+#[allow(dead_code)]
 pub async fn setup_scene(canvas: HtmlCanvasElement, rotation: Signal<f32>) {
     info!("Setting up WebGPU for globe rendering");
     let width = canvas.client_width() as u32;
@@ -84,6 +87,7 @@ pub async fn setup_scene(canvas: HtmlCanvasElement, rotation: Signal<f32>) {
 }
 
 /// Create WebGPU context: adapter, device, surface config, pipeline and resources
+#[allow(dead_code)]
 async fn create_render_pipeline(
     instance: &wgpu::Instance,
     surface: wgpu::Surface<'static>,
@@ -172,10 +176,12 @@ async fn create_render_pipeline(
             },
         ],
     });
-    // Fetch and downscale earth image via asset API
     let image_url = format!("{}/earth/3_no_ice_clouds_16k.jpg", env!("CITYWARS_STATIC_SITE"));
+    debug!("Attempting to fetch earth image from URL: {}", image_url);
+
     let resp = Request::get(&image_url)
         .send().await.expect("Failed to fetch earth image");
+
     let data = resp.binary().await.expect("Failed to read earth image bytes");
     let mut img = image::load_from_memory(&data).expect("Failed to decode earth image");
     let max_dim = device.limits().max_texture_dimension_2d;
@@ -202,9 +208,9 @@ async fn create_render_pipeline(
         view_formats: &[],
     });
     queue.write_texture(
-        wgpu::ImageCopyTexture { texture: &texture, mip_level: 0, origin: Default::default(), aspect: wgpu::TextureAspect::All },
+        wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: 0, origin: Default::default(), aspect: wgpu::TextureAspect::All },
         &rgba,
-        wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4 * tex_w), rows_per_image: Some(tex_h) },
+        wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * tex_w), rows_per_image: Some(tex_h) },
         wgpu::Extent3d { width: tex_w, height: tex_h, depth_or_array_layers: 1 },
     );
     let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());

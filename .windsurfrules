@@ -41,7 +41,10 @@ And finally: Always use the edit tool. If it does not work, read the file first 
 Make sure we use conventional commits
 Do not use interactive rebase (you are an LLM). If a git MCP server does rebases, use it.
 
-Try to use trunk hot reload. It is does not work, instead of allocating a new port, kill the older trunk instances.
+Try to use dioxus hot reload. It is does not work, instead of allocating a new port, use or kill the older dioxus instances. If it is just for building, just use cargo check or cargo compile.
+Do not use docker build when building locally.
+
+CITYWARS_STATIC_SITE="https://storage.googleapis.com/lv-project-313715-clickwars-static/static" is the right environnement variable to place in front of RUSTFLAGS="--cfg=web_sys_unstable_apis" cargo build --target wasm32-unknown-unknown or dx serve command.
 
 the frontend implementation is here: ./original-frontend
 the backend implementation is here: ./original-backend
@@ -52,3 +55,7 @@ Please read the documentation carefully.
 Don't put fucking useless comments that are exact duplicates of the code.
 
 Briefly explain what you are doing instead of just calling the tools.
+
+When compiling the webapp, the chain should be wasm, and not local machine one.
+
+When you launch a command use the Windsurf terminal API so that I can kill or stop a process by myself.

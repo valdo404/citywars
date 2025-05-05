@@ -6,11 +6,13 @@ use glam::{Mat4, Vec3};
 
 use crate::app::components::earth::setup_webgpu::{Uniforms, WebGpuContext};
 
+#[allow(dead_code)]
 pub struct RenderLoopContext {
     pub webgpu_context: WebGpuContext,
     pub rotation: Signal<f32>,
 }
 
+#[allow(dead_code)]
 pub fn start_animation(context: RenderLoopContext) {
     info!("Starting WebGPU animation loop");
     let WebGpuContext { 

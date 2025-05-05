@@ -6,27 +6,26 @@ mod app;
 mod backends;
 
 fn main() {
-    console_log::init_with_level(log::Level::Debug).expect("Unable to initialize console_log");
+    console_log::init_with_level(log::Level::Info).expect("Unable to initialize console_log");
     
     launch(App);
-
 }
 
-// Define app routes
-#[derive(Clone, PartialEq)]
+// Define app routes with Routable trait
+#[derive(Routable, Clone, PartialEq)]
 enum Route {
+    #[route("/")]
     Home {},
     
-    About {},
+    
+    // Fallback route for when no other routes match
+    #[route("/:..segments")]
+    NotFound { segments: Vec<String> },
 }
 
-
+// Root app component that sets up the router
+#[allow(non_snake_case)]
 fn App() -> Element {
-    let mut current_route = use_signal(|| Route::Home {});
-    
-    let navigate = move |route: Route| {
-        current_route.set(route);
-    };
     
     rsx! {
         document::Link { rel: "icon", href: asset!("public/static/favicon.png") }
@@ -39,18 +38,18 @@ fn App() -> Element {
         Stylesheet { href: asset!("public/styles/About.css") }
         Stylesheet { href: asset!("public/styles/Leaderboard.css") }
         Stylesheet { href: asset!("public/styles/Menu.css") }
+
         Stylesheet { href: asset!("public/styles/rust-specific.css") }
         div { class: "content",
-            match current_route() {
-                Route::Home {} => rsx! { HomeScreen {} },
-                Route::About {} => rsx! { AboutScreen {} },
-            }
+            // Router uses the Route enum to handle URL-based routing
+            Router::<Route> {}
         }
     }
 }
 
-// Updated for Dioxus 0.6.x compatibility
-fn HomeScreen() -> Element {
+// Home component with the globe and main UI
+#[component]
+fn Home() -> Element {
     let mut show_welcome_modal = use_signal(|| true);
     
     // Manage country state here, similar to the original TypeScript implementation
@@ -90,7 +89,7 @@ fn HomeScreen() -> Element {
                 }
             }
             
-            app::components::earth::globe::globe {}
+            // app::components::earth::globe::globe {}
             
             div { class: "menu",
                 app::components::leaderboard::Leaderboard {}
@@ -109,18 +108,42 @@ fn HomeScreen() -> Element {
     }
 }
 
-fn AboutScreen() -> Element {
+#[component]
+fn About() -> Element {
     rsx! {
         div { class: "about-page",
             h1 { "About ClickPlanet" }
             p { "ClickPlanet is a real-time collaborative globe where players from around the world can claim hexagonal territories for their countries." }
             p { "This is a Rust/WebAssembly implementation of the original ClickPlanet game." }
             button { 
-                onclick: move |_| {
-                    // Manual navigation logic
-                    // Would normally use Link component
-                }, 
+                onclick: move |_| { router().push(Route::Home {}); }, 
                 "Return to the globe" 
+            }
+
+
+        }
+    }
+}
+
+
+// 404 Not Found component
+#[component]
+fn NotFound(segments: Vec<String>) -> Element {
+    let url_path = if segments.is_empty() { 
+        "/".to_string() 
+    } else { 
+        format!("/{}", segments.join("/")) 
+    };
+    
+    rsx! {
+        div { class: "not-found", 
+            h1 { "Page Not Found" }
+            p { "The page you're looking for doesn't exist." }
+            p { 
+                "Requested URL: {url_path}"
+            }
+            Link { to: Route::Home {}, 
+                button { "Return Home" }
             }
         }
     }
