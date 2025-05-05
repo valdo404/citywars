@@ -89,7 +89,7 @@ fn Home() -> Element {
                 }
             }
             
-            // app::components::earth::globe::globe {}
+            app::components::earth::globe::Globe {}
             
             div { class: "menu",
                 app::components::leaderboard::Leaderboard {}

@@ -940,6 +940,7 @@ dependencies = [
  "gloo",
  "gloo-net 0.6.0",
  "gloo-timers",
+ "gloo-utils",
  "image",
  "js-sys",
  "lazy_static",

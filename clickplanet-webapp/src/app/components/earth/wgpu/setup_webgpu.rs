@@ -8,8 +8,8 @@ use wasm_bindgen_futures::spawn_local;
 use gloo_net::http::Request;
 use image::{GenericImageView, imageops::FilterType};
 
-use crate::app::components::earth::create_sphere::{Vertex, create_sphere};
-use crate::app::components::earth::animation_loop::{start_animation, RenderLoopContext};
+use super::create_sphere::{Vertex, create_sphere};
+use super::animation_loop::{start_animation, RenderLoopContext};
 
 #[cfg(test)]
 use crate::app::components::earth::shader_validation::validate_shader_code;

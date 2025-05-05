@@ -4,7 +4,7 @@ use log::{debug, info};
 use wasm_bindgen_futures::spawn_local;
 use glam::{Mat4, Vec3};
 
-use crate::app::components::earth::setup_webgpu::{Uniforms, WebGpuContext};
+use super::setup_webgpu::{Uniforms, WebGpuContext};
 
 #[allow(dead_code)]
 pub struct RenderLoopContext {

@@ -1,5 +1,3 @@
 pub mod globe;
-mod create_sphere;
-mod setup_webgpu;
-mod animation_loop;
-mod shader_validation;
+pub mod wgpu;
+pub mod three_js;

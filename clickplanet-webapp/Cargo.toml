@@ -61,6 +61,8 @@ wgpu = { version = "25.0.0", features = ["webgl", "webgpu", "wgsl"], default-fea
 bytemuck = { version = "1.14", features = ["derive"] }
 raw-window-handle = "0.6.0"
 gloo-timers = { version = "0.3.0", features = ["futures"] }
+gloo-utils = "0.2.0"
+
 
 # Enable/disable features based on target
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

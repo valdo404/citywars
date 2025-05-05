@@ -59,3 +59,7 @@ Briefly explain what you are doing instead of just calling the tools.
 When compiling the webapp, the chain should be wasm, and not local machine one.
 
 When you launch a command use the Windsurf terminal API so that I can kill or stop a process by myself.
+
+When downloading a caego or js or sbt dependency, check the latest one using your browser tools, before guessing. Your memory is not up to date.
+
+When I say, read the public docs, or review the public docs, you have to do it and use the fucking documentation or the source code of the project.
