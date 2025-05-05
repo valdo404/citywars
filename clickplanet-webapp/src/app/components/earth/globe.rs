@@ -1,110 +1,61 @@
 use dioxus::prelude::*;
-use gloo_timers::callback::Timeout;
+use dioxus::web::WebEventExt;
+use wasm_bindgen::JsCast;
+use web_sys::HtmlCanvasElement;
+use wasm_bindgen_futures::spawn_local;
+use gloo_timers::future::TimeoutFuture;
+use crate::app::components::earth::three_js::{init_cube, is_three_available};
 
 /// The Globe component acts as a wrapper for our Three.js implementation
 /// This uses the Three.js renderer instead of WebGPU directly for better compatibility
 #[component]
 pub fn Globe() -> Element {
     let mut cube_loaded = use_signal(|| false);
-    let mut scripts_loaded = use_signal(|| false);
     let canvas_id = "simple-cube-canvas";
 
-    // Check if scripts are loaded and initialize Three.js
-    use_effect(move || {
-        if scripts_loaded() {
-            use wasm_bindgen_futures::spawn_local;
-            use crate::app::components::earth::three_js::{init_cube, is_three_available};
-            
-            spawn_local(async move {
-                // Additional verification that Three.js is available
-                if is_three_available() {
-                    if let Err(_) = init_cube(canvas_id) {
-                        // Silently handle error
-                    } else {
-                        cube_loaded.set(true);
-                    }
-                }
-            });
-        }
-
-        // No cleanup needed
-        ()
-    });
-    
-    // Set a timer to check if scripts are loaded
-    use_effect(move || {
-        use wasm_bindgen::prelude::*;
-        
-        // Wait for scripts to load
-        let timeout_ms = 1000; // Give scripts enough time to load
-        
-        let handle = Timeout::new(timeout_ms, move || {
-            // Check if Three.js is available after timeout
-            use crate::app::components::earth::three_js::is_three_available;
-            
-            let three_available = is_three_available();
-            if three_available {
-                scripts_loaded.set(true);
-            }
-        });
-        
-        // Cleanup function
-        (|| { drop(handle); })()
-    });
-
-    // Simplified script loading - load Three.js directly in the RSX
-    // Then use the hook to check if it's available and initialize the cube
-    
-    // Check if scripts are loaded and initialize Three.js - this is called immediately and after scripts load
-    use_effect(move || {
-        use wasm_bindgen::prelude::*;
-        use wasm_bindgen_futures::spawn_local;
-        use crate::app::components::earth::three_js::{init_cube, is_three_available};
-        
-        // Check if Three.js is available
-        spawn_local(async move {
-            // Direct check - wait a little to ensure scripts have a chance to load
-            gloo_timers::future::TimeoutFuture::new(500).await;
-            
-            let three_available = is_three_available();
-            
-            if three_available {
-                scripts_loaded.set(true);
-                
-                // Now initialize the cube
-                if let Err(_) = init_cube(canvas_id) {
-                    // Silently handle error
-                } else {
-                    cube_loaded.set(true);
-                }
-            }
-        });
-        
-        // No cleanup needed
-        ()
-    });
-
+    // We'll skip most of the complex lifecycle management and script loading checks
     rsx! {
-        // Load Three.js as a regular script (not a module) to make it globally available
-        document::Script {
-            src: "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"
-        }
-        
-        // Load OrbitControls after Three.js
-        document::Script {
-            src: "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"
-        }
-        
         div {
-            class: "earth-container",
-            style: "width: 100%; height: 100vh; overflow: hidden;",
+            div { class: "status-indicator",
+                if cube_loaded() {
+                    "Three.js Cube is loaded and running."
+                } else {
+                    "Loading Three.js cube..."
+                }
+            }
             
-            // Canvas for Three.js rendering
+            // Load Three.js script
+            script { src: "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js" }
+            
+            // Canvas for the 3D cube - using onmounted to get direct access
             canvas {
                 id: "{canvas_id}",
+                height: "500",
                 width: "100%",
-                height: "100%",
-                style: "display: block; background-color: #000;"
+                style: "background-color: black;",
+                onmounted: move |_element| {
+                    // In Dioxus, we need to use the as_web_event method to get access to the web_sys::Element
+                        // WebEventExt is imported at the top of the file
+                        let web_element = _element.as_web_event();
+                        
+                        // Now cast to HtmlCanvasElement
+                        if let Some(canvas) = web_element.dyn_into::<HtmlCanvasElement>().ok() {
+                        // Initialize Three.js with the canvas element directly
+                        spawn_local(async move {
+                            // Use gloo_timers to wait for Three.js to load
+                            TimeoutFuture::new(500).await;
+                            
+                            // Initialize the cube with canvas directly
+                            // three_js functions are imported at the top of the file
+                            
+                            if is_three_available() {
+                                if let Ok(_) = init_cube(&canvas) {
+                                    cube_loaded.set(true);
+                                }
+                            }
+                        });
+                    }
+                }
             }
         }
     }

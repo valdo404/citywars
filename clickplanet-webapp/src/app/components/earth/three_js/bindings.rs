@@ -1,7 +1,159 @@
 use wasm_bindgen::prelude::*;
 use web_sys::Element;
+use js_sys;
 
-// Three.js bindings - using standard imports without module paths
+#[wasm_bindgen]
+pub struct WebGLRendererParams {
+    #[wasm_bindgen(skip)]
+    pub canvas: Option<web_sys::HtmlCanvasElement>,
+    
+    pub alpha: Option<bool>,
+    pub antialias: Option<bool>,
+    pub depth: Option<bool>,
+    pub premultiplied_alpha: Option<bool>,
+    pub preserve_drawing_buffer: Option<bool>,
+}
+
+#[wasm_bindgen]
+impl WebGLRendererParams {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self {
+            canvas: None,
+            alpha: None,
+            antialias: None,
+            depth: None,
+            premultiplied_alpha: None,
+            preserve_drawing_buffer: None,
+        }
+    }
+    
+    pub fn set_canvas(&mut self, canvas: &web_sys::HtmlCanvasElement) {
+        self.canvas = Some(canvas.clone());
+    }
+    
+    pub fn set_alpha(&mut self, alpha: bool) {
+        self.alpha = Some(alpha);
+    }
+    
+    pub fn set_antialias(&mut self, antialias: bool) {
+        self.antialias = Some(antialias);
+    }
+    
+    pub fn set_depth(&mut self, depth: bool) {
+        self.depth = Some(depth);
+    }
+    
+    pub fn set_premultiplied_alpha(&mut self, premultiplied_alpha: bool) {
+        self.premultiplied_alpha = Some(premultiplied_alpha);
+    }
+    
+    pub fn set_preserve_drawing_buffer(&mut self, preserve_drawing_buffer: bool) {
+        self.preserve_drawing_buffer = Some(preserve_drawing_buffer);
+    }
+}
+
+impl From<&WebGLRendererParams> for JsValue {
+    fn from(params: &WebGLRendererParams) -> Self {
+        let obj = js_sys::Object::new();
+        
+        if let Some(canvas) = &params.canvas {
+            let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("canvas"), canvas);
+        }
+        
+        if let Some(alpha) = params.alpha {
+            let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("alpha"), &JsValue::from_bool(alpha));
+        }
+        
+        if let Some(antialias) = params.antialias {
+            let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("antialias"), &JsValue::from_bool(antialias));
+        }
+        
+        if let Some(depth) = params.depth {
+            let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("depth"), &JsValue::from_bool(depth));
+        }
+        
+        if let Some(premultiplied_alpha) = params.premultiplied_alpha {
+            let _ = js_sys::Reflect::set(
+                &obj, 
+                &JsValue::from_str("premultipliedAlpha"), 
+                &JsValue::from_bool(premultiplied_alpha)
+            );
+        }
+        
+        if let Some(preserve_drawing_buffer) = params.preserve_drawing_buffer {
+            let _ = js_sys::Reflect::set(
+                &obj, 
+                &JsValue::from_str("preserveDrawingBuffer"), 
+                &JsValue::from_bool(preserve_drawing_buffer)
+            );
+        }
+        
+        obj.into()
+    }
+}
+
+#[wasm_bindgen]
+pub struct MeshBasicMaterialParams {
+    pub color: Option<u32>,
+    pub wireframe: Option<bool>,
+    pub transparent: Option<bool>,
+    pub opacity: Option<f64>,
+}
+
+#[wasm_bindgen]
+impl MeshBasicMaterialParams {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self {
+            color: None,
+            wireframe: None,
+            transparent: None,
+            opacity: None,
+        }
+    }
+    
+    pub fn set_color(&mut self, color: u32) {
+        self.color = Some(color);
+    }
+    
+    pub fn set_wireframe(&mut self, wireframe: bool) {
+        self.wireframe = Some(wireframe);
+    }
+    
+    pub fn set_transparent(&mut self, transparent: bool) {
+        self.transparent = Some(transparent);
+    }
+    
+    pub fn set_opacity(&mut self, opacity: f64) {
+        self.opacity = Some(opacity);
+    }
+}
+
+impl From<&MeshBasicMaterialParams> for JsValue {
+    fn from(params: &MeshBasicMaterialParams) -> Self {
+        let obj = js_sys::Object::new();
+        
+        if let Some(color) = params.color {
+            let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("color"), &JsValue::from_f64(color as f64));
+        }
+        
+        if let Some(wireframe) = params.wireframe {
+            let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("wireframe"), &JsValue::from_bool(wireframe));
+        }
+        
+        if let Some(transparent) = params.transparent {
+            let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("transparent"), &JsValue::from_bool(transparent));
+        }
+        
+        if let Some(opacity) = params.opacity {
+            let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("opacity"), &JsValue::from_f64(opacity));
+        }
+        
+        obj.into()
+    }
+}
+
 #[wasm_bindgen]
 extern "C" {
     // Main Three.js namespace
@@ -28,6 +180,9 @@ extern "C" {
 
     #[wasm_bindgen(js_namespace = THREE)]
     pub type WebGLRenderer;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new() -> WebGLRenderer;
 
     #[wasm_bindgen(constructor, js_namespace = THREE)]
     pub fn new_with_parameters(params: &JsValue) -> WebGLRenderer;

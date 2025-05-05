@@ -938,6 +938,7 @@ dependencies = [
  "getrandom 0.2.15",
  "glam",
  "gloo",
+ "gloo-console",
  "gloo-net 0.6.0",
  "gloo-timers",
  "gloo-utils",
