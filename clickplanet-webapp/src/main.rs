@@ -26,22 +26,32 @@ enum Route {
 // Root app component that sets up the router
 #[allow(non_snake_case)]
 fn App() -> Element {
-    
-    rsx! {
-        // document::Link { rel: "icon", href: asset!("public/static/favicon.png") }
-        // Stylesheet { href: asset!("public/styles/base.css") }
-        // Stylesheet { href: asset!("public/styles/DiscordButton.css") }
-        // Stylesheet { href: asset!("public/styles/BuyMeACoffee.css") }
-        // Stylesheet { href: asset!("public/styles/Modal.css") }
-        // Stylesheet { href: asset!("public/styles/CloseButton.css") }
-        // Stylesheet { href: asset!("public/styles/SelectWithSearch.css") }
-        // Stylesheet { href: asset!("public/styles/About.css") }
-        // Stylesheet { href: asset!("public/styles/Leaderboard.css") }
-        // Stylesheet { href: asset!("public/styles/Menu.css") }
+    let import_map = r#"{
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }"#.to_string();
 
-        // Stylesheet { href: asset!("public/styles/rust-specific.css") }
+    rsx! {
+        document::Link { rel: "icon", href: asset!("public/static/favicon.png") }
+        Stylesheet { href: asset!("public/styles/base.css") }
+        Stylesheet { href: asset!("public/styles/DiscordButton.css") }
+        Stylesheet { href: asset!("public/styles/BuyMeACoffee.css") }
+        Stylesheet { href: asset!("public/styles/Modal.css") }
+        Stylesheet { href: asset!("public/styles/CloseButton.css") }
+        Stylesheet { href: asset!("public/styles/SelectWithSearch.css") }
+        Stylesheet { href: asset!("public/styles/About.css") }
+        Stylesheet { href: asset!("public/styles/Leaderboard.css") }
+        Stylesheet { href: asset!("public/styles/Menu.css") }
+
+        script { 
+            r#type: "importmap",
+            {import_map}    
+        }
+
+        Stylesheet { href: asset!("public/styles/rust-specific.css") }
         div { class: "content",
-            // Router uses the Route enum to handle URL-based routing
             Router::<Route> {}
         }
     }
@@ -50,23 +60,21 @@ fn App() -> Element {
 // Home component with the globe and main UI
 #[component]
 fn Home() -> Element {
-    // let mut show_welcome_modal = use_signal(|| true);
+    let mut show_welcome_modal = use_signal(|| true);
     
     // Manage country state here, similar to the original TypeScript implementation
-    /*let mut country = use_signal(|| Country {
+    let mut country = use_signal(|| Country {
         name: "United States".to_string(),
         code: "us".to_string(),
-    });*/
+    });
     
     // Callback to update country
-    /*let set_country = move |new_country: Country| {
+    let set_country = move |new_country: Country| {
         country.set(new_country);
-    };*/
+    };
     
     rsx! {
-        div { class: "container",
-            // Commented out welcome modal
-            /* 
+        div { class: "container",            
             if show_welcome_modal() {
                 app::components::on_load_modal::OnLoadModal {
                     title: "Dear earthlings".to_string(),
@@ -90,13 +98,10 @@ fn Home() -> Element {
                     }
                 }
             }
-            */
             
-            // Only show the globe component for now
+            
             app::components::earth::globe::Globe {}
-            
-            // Commented out menu and other UI elements
-            /*
+                        
             div { class: "menu",
                 app::components::leaderboard::Leaderboard {}
                 div { class: "menu-actions",
@@ -110,7 +115,6 @@ fn Home() -> Element {
                     }
                 }
             }
-            */
         }
     }
 }

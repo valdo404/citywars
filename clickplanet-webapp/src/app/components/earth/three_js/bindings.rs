@@ -327,54 +327,84 @@ extern "C" {
 
 // Function to check if Three.js is available in the global scope
 pub fn is_three_available() -> bool {
+    js_sys::eval("typeof THREE !== 'undefined'").unwrap().as_bool().unwrap_or(false)
+}
+
+pub fn diagnose_three_js_loading() -> String {
     use wasm_bindgen::prelude::*;
     use web_sys::console;
     
-    // Try to access the THREE global object via window
-    console::log_1(&JsValue::from_str("Checking for THREE global object..."));
-    
-    if let Some(window) = web_sys::window() {
-        // Log all available global objects for debugging
-        if let Ok(keys) = js_sys::Reflect::own_keys(&window) {
-            console::log_2(
-                &JsValue::from_str("Window global objects available:"),
-                &keys
-            );
-        }
+    let diagnostic_script = r#"(function() { 
+        let results = {
+            three: {
+                available: false,
+                version: null,
+                error: null
+            },
+            orbitControls: {
+                available: false,
+                error: null
+            },
+            scripts: []
+        };
         
-        // Check if THREE is directly available on window
-        if js_sys::Reflect::has(&window, &JsValue::from_str("THREE")).unwrap_or(false) {
-            console::log_1(&JsValue::from_str("THREE found directly on window object!"));
-            return true;
-        }
-        
-        // Try the eval approach as a backup
-        let eval_script = r#"(function() { 
-            try { 
-                if (typeof THREE !== 'undefined') {
-                    console.log('THREE found with type:', typeof THREE);
-                    console.log('THREE version:', THREE.REVISION || 'unknown');
-                    return true; 
-                } else {
-                    console.log('THREE is undefined in global scope');
-                    return false;
-                }
-            } catch(err) {
-                console.error('Error checking THREE:', err);
-                return false;
+        // Check for all script tags loaded
+        document.querySelectorAll('script').forEach(script => {
+            if (script.src) {
+                results.scripts.push(script.src);
             }
-        })()
-        "#;
+        });
         
-        // Execute the evaluation script
-        if let Ok(result) = js_sys::eval(eval_script) {
-            console::log_1(&JsValue::from_str(&format!("THREE availability check result: {}", result.is_truthy())));
-            return result.is_truthy();
+        // Check THREE
+        try {
+            if (typeof THREE !== 'undefined') {
+                results.three.available = true;
+                results.three.version = THREE.REVISION || 'unknown';
+            }
+        } catch(err) {
+            results.three.error = err.toString();
+        }
+        
+        // Check OrbitControls - when using ES modules, it should be exposed as a global via our script
+        try {
+            if (typeof OrbitControls !== 'undefined') {
+                results.orbitControls.available = true;
+            } else {
+                results.orbitControls.error = 'OrbitControls is not defined in global scope';
+                // If THREE is available but not OrbitControls, provide more context
+                if (typeof THREE !== 'undefined') {
+                    results.orbitControls.note = 'THREE is loaded but OrbitControls was not properly exposed to the global scope';
+                } else {
+                    results.orbitControls.note = 'THREE is not loaded, so OrbitControls cannot be used';
+                }
+            }
+        } catch(err) {
+            results.orbitControls.error = err.toString();
+        }
+        
+        return JSON.stringify(results);
+    })()
+    "#;
+    
+    // Execute the diagnostic script
+    if let Ok(result) = js_sys::eval(diagnostic_script) {
+        if let Some(result_str) = result.as_string() {
+            console::log_1(&JsValue::from_str(&format!("THREE diagnostic result: {}", result_str)));
+            return result_str;
         }
     }
     
-    console::log_1(&JsValue::from_str("Failed to check THREE availability"));
-    false
+    console::log_1(&JsValue::from_str("Failed to run diagnostic script"));
+    "Failed to run diagnostic script".to_string()
+}
+
+// SphereGeometry bindings
+#[wasm_bindgen]
+extern "C" {
+    pub type SphereGeometry;
+
+    #[wasm_bindgen(constructor)]
+    pub fn new(radius: f64, width_segments: u32, height_segments: u32) -> SphereGeometry;
 }
 
 // OrbitControls bindings - using standard imports

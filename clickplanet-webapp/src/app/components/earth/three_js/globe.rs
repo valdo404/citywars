@@ -1,13 +1,15 @@
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
-use gloo_utils::{document, window};
+use gloo_utils::{window};
 use std::rc::Rc;
 use std::cell::RefCell;
 use gloo::render::{AnimationFrame, request_animation_frame};
-use log::info;
+use gloo_console;
+use log;
 
-use super::bindings::{WebGLRendererParams, WebGLRenderer};
-use super::bindings::*;
+use super::bindings::{self, AmbientLight, Scene, OrthographicCamera, OrbitControls, 
+    WebGLRenderer, WebGLRendererParams, TextureLoader, Mesh, IcosahedronGeometry,
+    MeshStandardMaterial, diagnose_three_js_loading, is_three_available};
 
 struct ThreeJsGlobeState {
     scene: Option<Scene>,
@@ -33,11 +35,17 @@ thread_local! {
 
 /// Initialize the Three.js scene with the Earth globe
 pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
+    // First log to check if function is being called
+    gloo_console::log!("INIT GLOBE STARTING");
     cleanup_globe();
     
     // Set the static site URL as a global variable for texture loading
     let static_site = env!("CITYWARS_STATIC_SITE");
     let window = window();
+    
+    // Run detailed diagnostic to check Three.js and OrbitControls availability
+    let diagnostic_result = super::bindings::diagnose_three_js_loading();
+    gloo_console::log!("THREE diagnostics: {}", diagnostic_result);
     
     // Check if THREE object is available in the global scope
     let three_available = js_sys::Reflect::has(&window, &JsValue::from_str("THREE"))
@@ -56,6 +64,7 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
     
     // Create scene
     let scene = Scene::new();
+    gloo_console::log!("Scene created");
     
     // Set up camera
     let width = window.inner_width()
@@ -71,6 +80,7 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
     let aspect = width / height;
     let camera_size = 1.0;
     
+    // Use OrthographicCamera as in the original code
     let camera = OrthographicCamera::new(
         -camera_size * aspect,
         camera_size * aspect,
@@ -80,9 +90,10 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
         100.0
     );
     
-    // Position camera
+    // Position camera just like in the original code
     let position = camera.position();
     position.set_z(5.0);
+    gloo_console::log!("Camera created and positioned at z=5.0");
     
     // Create renderer with Rust-idiomatic parameters
     let mut renderer_params = WebGLRendererParams::new();
@@ -90,22 +101,40 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
     renderer_params.set_antialias(true);
     
     let js_params = JsValue::from(&renderer_params);
+    
     let renderer = WebGLRenderer::new_with_parameters(&js_params);
     renderer.set_size(width, height);
-    renderer.set_clear_color(0x000000);
     
-    // Add lighting
+    // Ensure the background is black (0x000000)
+    renderer.set_clear_color(0x000000);
+    gloo_console::log!("Setting renderer background to black");
+    
+    // Fix the formatting syntax for gloo_console
+    let size_msg = format!("Renderer created with size: {} x {}", width, height);
+    gloo_console::log!(size_msg);
+    
+    // Add lighting just like in the original code
     let light = AmbientLight::new(0xffffff, 2.0);
     scene.add(&light);
+    gloo_console::log!("Lighting added to scene");
     
     // Create earth sphere
     let static_site = env!("CITYWARS_STATIC_SITE");
-    let texture_loader = TextureLoader::new();
-    let earth_texture = texture_loader.load(&format!("{}/earth/3_no_ice_clouds_16k.jpg", static_site));
+    // let texture_loader = TextureLoader::new();
     
+    // COMMENTED OUT: Texture loading for now
+    // let earth_texture = texture_loader.load(&format!("{}/earth/3_no_ice_clouds_16k.jpg", static_site));
+    // let texture_msg = format!("Texture loading from: {}/earth/3_no_ice_clouds_16k.jpg", static_site);
+    // gloo_console::log!(texture_msg);
+    
+    // Create a simple red material instead
     let material_params = js_sys::Object::new();
-    js_sys::Reflect::set(&material_params, &"map".into(), &earth_texture).unwrap();
+    // Set color to red (0xFF0000)
+    js_sys::Reflect::set(&material_params, &"color".into(), &JsValue::from_f64(16711680.0)).unwrap(); // 0xFF0000 as f64
+    gloo_console::log!("Using red material for sphere instead of texture");
     
+    // Create inner sphere with slightly smaller radius to match original
+    // This exactly matches the innerSphere() function in the original code
     let earth_geometry = IcosahedronGeometry::new(0.999, 50);
     let earth_material = MeshStandardMaterial::new_with_params(&material_params);
     
@@ -123,7 +152,10 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
     );
     
     scene.add(&earth_mesh);
+    gloo_console::log!("Earth mesh added to scene");
     
+    // COMMENTED OUT: Orbit controls setup
+    /*
     // Set up orbit controls similar to the original frontend
     let controls = OrbitControls::new(&camera, &renderer.domElement());
     controls.set_min_zoom(1.0);
@@ -138,23 +170,32 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
         let mut state = state_ref.borrow_mut();
         state.controls = Some(controls);
     });
+    */
     
+    // Render once without controls for now - MUST be done before moving to STATE
+    renderer.render(&scene, &camera);
+    
+    // COMMENTED OUT: Control change callback
+    /*
     // Create a callback that works with controls via STATE rather than direct capture
     let control_change_callback = Closure::wrap(Box::new(|| {
-        // Access controls through STATE to avoid move issues
         STATE.with(|state_ref| {
             let state = state_ref.borrow();
-            if let Some(controls) = &state.controls {
-                // We can update controls settings here if needed
+            if let (Some(scene), Some(camera), Some(renderer)) = (&state.scene, &state.camera, &state.renderer) {
+                renderer.render(scene, camera);
             }
         });
     }) as Box<dyn FnMut()>);
+    */
+    
+    // Simple empty callback for now
+    let control_change_callback = Closure::wrap(Box::new(|| {}) as Box<dyn FnMut()>);
     
     // Get a reference to controls from STATE to add the event listener
     STATE.with(|state_ref| {
         let state = state_ref.borrow();
         if let Some(controls) = &state.controls {
-            controls.add_event_listener("change", &control_change_callback);
+            // controls.add_event_listener("change", &control_change_callback);
         }
     });
     
@@ -164,7 +205,7 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
         state.callbacks.push(control_change_callback);
     });
     
-    // Register window resize handler
+    /* COMMENTED OUT: Window resize handler
     let resize_callback = Closure::wrap(Box::new(move || {
         STATE.with(|state_ref| {
             let state = state_ref.borrow();
@@ -175,6 +216,7 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
                 let aspect = width / height;
                 
                 let camera_size = 1.0;
+                // Update the orthographic camera parameters
                 camera.set_left(-camera_size * aspect);
                 camera.set_right(camera_size * aspect);
                 camera.set_top(camera_size);
@@ -185,6 +227,9 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
             }
         });
     }) as Box<dyn FnMut()>);
+    */
+    // Simple empty callback for now
+    let resize_callback = Closure::wrap(Box::new(move || {}) as Box<dyn FnMut()>);
     
     // Add the resize listener
     window.add_event_listener_with_callback("resize", resize_callback.as_ref().unchecked_ref()).unwrap();
@@ -202,13 +247,15 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
         state.camera = Some(camera);
         state.renderer = Some(renderer);
         state.earth_mesh = Some(earth_mesh);
-        // controls already stored above
+        // state.controls = Some(controls); // Commented out since we commented the controls
     });
     
-    // Start animation loop
-    start_animation()?;
+    // COMMENTED OUT: Animation
+    // start_animation()?;
     
-    info!("Three.js Earth globe initialized");
+    // No need for another render call here, already rendered above
+    
+    log::info!("Three.js Earth globe initialized");
     Ok(())
 }
 
@@ -268,6 +315,17 @@ fn start_animation() -> Result<(), JsError> {
             // Render the scene
             let camera_js: &JsValue = camera.as_ref();
             renderer.render(scene, camera_js);
+            
+            // Log the first few animation frames to confirm rendering is happening
+            static mut FRAME_COUNT: u32 = 0;
+            unsafe {
+                if FRAME_COUNT < 5 {
+                    // Fix the formatting syntax for gloo_console
+                    let frame_msg = format!("Animation frame rendered: {}", FRAME_COUNT);
+                    gloo_console::log!(frame_msg);
+                    FRAME_COUNT += 1;
+                }
+            }
             
             // Schedule the next animation frame
             request_next_frame(state_ref_clone.clone());
