@@ -234,6 +234,12 @@ extern "C" {
     #[wasm_bindgen(method, setter, js_namespace = THREE)]
     pub fn set_right(this: &OrthographicCamera, right: f64);
 
+    #[wasm_bindgen(method, setter, js_namespace = THREE)]
+    pub fn set_top(this: &OrthographicCamera, top: f64);
+
+    #[wasm_bindgen(method, setter, js_namespace = THREE)]
+    pub fn set_bottom(this: &OrthographicCamera, bottom: f64);
+
     #[wasm_bindgen(extends = Object3D, js_namespace = THREE)]
     pub type AmbientLight;
 
