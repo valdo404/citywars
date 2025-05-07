@@ -289,6 +289,12 @@ extern "C" {
     #[wasm_bindgen(constructor, js_namespace = THREE)]
     pub fn new() -> TextureLoader;
 
+    // Single load method with all parameters
+    // When calling this method, you can pass JsValue::UNDEFINED for callbacks you don't need
+    #[wasm_bindgen(method, js_namespace = THREE, js_name = load)]
+    pub fn load_with_callbacks(this: &TextureLoader, url: &str, on_load: &JsValue, on_progress: &JsValue, on_error: &JsValue) -> Texture;
+    
+    // Convenience method for simple loading without callbacks
     #[wasm_bindgen(method, js_namespace = THREE, js_name = load)]
     pub fn load(this: &TextureLoader, url: &str) -> Texture;
 
