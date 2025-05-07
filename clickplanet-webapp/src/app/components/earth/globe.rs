@@ -30,13 +30,15 @@ pub fn Globe() -> Element {
                 console.log('OrbitControls available:', typeof OrbitControls);
                 console.log('GLTFLoader available:', typeof GLTFLoader);
                 
-                // Add texture loading test to check if the URL is correct
+                // Make sure to expose environment variable to JavaScript
+                window.CITYWARS_STATIC_SITE = "https://storage.googleapis.com/lv-project-313715-clickwars-static/static";
+                // Add texture loading test with detailed diagnostics
                 const textureUrl = window.CITYWARS_STATIC_SITE + '/earth/3_no_ice_clouds_16k.jpg';
                 console.log('Testing texture URL:', textureUrl);
-                const img = new Image();
-                img.onload = () => console.log('✅ Texture loaded successfully:', textureUrl);
-                img.onerror = () => console.error('❌ Texture failed to load:', textureUrl);
-                img.src = textureUrl;
+                
+                // Check CORS environment
+                console.log('CORS Origin:', window.location.origin);
+                console.log('CORS Headers available in browser:', typeof Headers);
             "#}
         }
 

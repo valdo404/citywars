@@ -1,15 +1,18 @@
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
-use gloo_utils::{window};
+use js_sys::Object;
+use gloo_utils::window;
 use std::rc::Rc;
 use std::cell::RefCell;
 use gloo::render::{AnimationFrame, request_animation_frame};
 use gloo_console;
+use gloo_timers::callback::Timeout;
 use log;
 
-use super::bindings::{self, AmbientLight, Scene, OrthographicCamera, OrbitControls, 
-    WebGLRenderer, WebGLRendererParams, TextureLoader, Mesh, IcosahedronGeometry,
-    MeshStandardMaterial, diagnose_three_js_loading, is_three_available};
+use crate::app::components::earth::three_js::bindings::{Scene, WebGLRenderer, OrbitControls, AmbientLight, 
+    MeshStandardMaterial, BufferGeometry, Material, Texture, Mesh, OrthographicCamera, WebGLRendererParams,
+    IcosahedronGeometry};
+use crate::app::components::earth::three_js::bindings::TextureLoader;
 
 struct ThreeJsGlobeState {
     scene: Option<Scene>,
@@ -33,21 +36,86 @@ thread_local! {
     });
 }
 
+fn create_earth_geometry() -> BufferGeometry {
+    let earth_geometry: IcosahedronGeometry = IcosahedronGeometry::new(0.999, 50);
+    let geometry_js: &JsValue = earth_geometry.as_ref();
+    let buffer_geometry: BufferGeometry = geometry_js.clone().into();
+    buffer_geometry
+}
+
+/// Helper function to create a material with a specific color
+fn create_material_with_color(color: u32) -> MeshStandardMaterial {
+    let params = js_sys::Object::new();
+    js_sys::Reflect::set(&params, &"color".into(), &color.into()).unwrap();
+    MeshStandardMaterial::new_with_params(&params)
+}
+
+/// Creates earth material following the original frontend implementation
+fn create_earth_material(static_site: &str) -> Material {
+
+    
+    // Debug original implementation pattern
+    gloo_console::log!("ORIGINAL: creating THREE.MeshStandardMaterial with map: textureLoader.load(...)");
+    
+    // Create a material with white base color using our helper function
+    let earth_material: MeshStandardMaterial = create_material_with_color(0xFFFFFF);
+    
+    // Load texture
+    let texture_url: String = format!("{}/earth/3_no_ice_clouds_16k.jpg", static_site);
+    gloo_console::log!(format!("Loading texture from: {}", texture_url));
+    
+    // Create texture loader with CORS handling
+    let texture_loader: TextureLoader = TextureLoader::new();
+    texture_loader.set_cross_origin("anonymous");
+    
+    // Load the texture
+    let earth_texture: Texture = texture_loader.load(&texture_url);
+    
+    // Check initial texture properties
+    gloo_console::log!("Initial texture object:");
+    gloo_console::log!(&earth_texture);
+    
+    // Set the texture on the material now
+    gloo_console::log!("Setting texture on material");
+    js_sys::Reflect::set(earth_material.as_ref(), &"map".into(), earth_texture.as_ref()).unwrap();
+    
+    // Create a shared reference to the material that can be used from the timer closure
+    let material_ref = Rc::new(earth_material);
+    let material_clone = material_ref.clone();
+    
+    // Set up a timer to update the material after 2 seconds when texture has loaded
+    gloo_console::log!("Setting up 2-second gloo timer for texture loading");
+    let timeout = Timeout::new(2_000, move || {
+        gloo_console::log!("Timer complete - updating material");
+        
+        // Set needsUpdate to true to tell Three.js to refresh the material
+        js_sys::Reflect::set(material_clone.as_ref(), &"needsUpdate".into(), &JsValue::from_bool(true)).unwrap();
+        
+        gloo_console::log!("Material updated with texture");
+    });
+    
+    // Forget the timeout so it's not dropped early
+    timeout.forget();
+    
+    // Get the material from the Rc and convert it to the right type
+    // We need to explicitly convert to JsValue first
+    let js_val: JsValue = wasm_bindgen::JsValue::from(material_ref.as_ref());
+    let material_value = Material::from(js_val);
+    
+    material_value
+}
+
 /// Initialize the Three.js scene with the Earth globe
 pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
-    // First log to check if function is being called
     gloo_console::log!("INIT GLOBE STARTING");
     cleanup_globe();
     
-    // Set the static site URL as a global variable for texture loading
     let static_site = env!("CITYWARS_STATIC_SITE");
     let window = window();
     
-    // Run detailed diagnostic to check Three.js and OrbitControls availability
     let diagnostic_result = super::bindings::diagnose_three_js_loading();
     gloo_console::log!("THREE diagnostics: {}", diagnostic_result);
     
-    // Check if THREE object is available in the global scope
     let three_available = js_sys::Reflect::has(&window, &JsValue::from_str("THREE"))
         .map_err(|_| JsError::new("Failed to check for THREE global object"))?;
     
@@ -55,18 +123,15 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
         return Err(JsError::new("THREE global object not found. Make sure Three.js is loaded properly."));
     }
     
-    // Set the static site URL directly on the window object
     js_sys::Reflect::set(
         &window,
         &JsValue::from_str("CITYWARS_STATIC_SITE"),
         &JsValue::from_str(static_site)
     ).map_err(|_| JsError::new("Failed to set static site URL"))?;
     
-    // Create scene
     let scene = Scene::new();
     gloo_console::log!("Scene created");
     
-    // Set up camera
     let width = window.inner_width()
         .map_err(|_| JsError::new("Failed to get window width"))?
         .as_f64()
@@ -80,7 +145,6 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
     let aspect = width / height;
     let camera_size = 1.0;
     
-    // Use OrthographicCamera as in the original code
     let camera = OrthographicCamera::new(
         -camera_size * aspect,
         camera_size * aspect,
@@ -90,65 +154,25 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
         100.0
     );
     
-    // Position camera just like in the original code
     let position = camera.position();
     position.set_z(5.0);
     gloo_console::log!("Camera created and positioned at z=5.0");
     
-    // Create renderer with Rust-idiomatic parameters
     let mut renderer_params = WebGLRendererParams::new();
     renderer_params.set_canvas(&canvas);
     renderer_params.set_antialias(true);
     
-    let js_params = JsValue::from(&renderer_params);
+    let js_params: JsValue = JsValue::from(&renderer_params);
     
-    let renderer = WebGLRenderer::new_with_parameters(&js_params);
+    let renderer: WebGLRenderer = WebGLRenderer::new_with_parameters(&js_params);
     renderer.set_size(width, height);
-    
-    // Ensure the background is black (0x000000)
     renderer.set_clear_color(0x000000);
-    gloo_console::log!("Setting renderer background to black");
     
-    // Fix the formatting syntax for gloo_console
-    let size_msg = format!("Renderer created with size: {} x {}", width, height);
-    gloo_console::log!(size_msg);
+    scene.add(&AmbientLight::new(0xffffff, 2.0));
     
-    // Add lighting just like in the original code
-    let light = AmbientLight::new(0xffffff, 2.0);
-    scene.add(&light);
-    gloo_console::log!("Lighting added to scene");
-    
-    // Create earth sphere
-    let static_site = env!("CITYWARS_STATIC_SITE");
-    // let texture_loader = TextureLoader::new();
-    
-    // COMMENTED OUT: Texture loading for now
-    // let earth_texture = texture_loader.load(&format!("{}/earth/3_no_ice_clouds_16k.jpg", static_site));
-    // let texture_msg = format!("Texture loading from: {}/earth/3_no_ice_clouds_16k.jpg", static_site);
-    // gloo_console::log!(texture_msg);
-    
-    // Create a simple red material instead
-    let material_params = js_sys::Object::new();
-    // Set color to red (0xFF0000)
-    js_sys::Reflect::set(&material_params, &"color".into(), &JsValue::from_f64(16711680.0)).unwrap(); // 0xFF0000 as f64
-    gloo_console::log!("Using red material for sphere instead of texture");
-    
-    // Create inner sphere with slightly smaller radius to match original
-    // This exactly matches the innerSphere() function in the original code
-    let earth_geometry = IcosahedronGeometry::new(0.999, 50);
-    let earth_material = MeshStandardMaterial::new_with_params(&material_params);
-    
-    // Properly cast the types for Rust
-    let geometry_js: &JsValue = earth_geometry.as_ref();
-    let material_js: &JsValue = earth_material.as_ref();
-    
-    // Create BufferGeometry and Material from JS representations
-    let buffer_geometry = geometry_js.clone().into();
-    let material_value = material_js.clone().into();
-    
-    let earth_mesh = Mesh::new_with_geometry_material(
-        &buffer_geometry, 
-        &material_value
+    let earth_mesh: Mesh = Mesh::new_with_geometry_material(
+        &create_earth_geometry(), 
+        &create_earth_material(static_site)
     );
     
     scene.add(&earth_mesh);
@@ -194,7 +218,7 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
     // Get a reference to controls from STATE to add the event listener
     STATE.with(|state_ref| {
         let state = state_ref.borrow();
-        if let Some(controls) = &state.controls {
+        if let Some(_controls) = &state.controls {
             // controls.add_event_listener("change", &control_change_callback);
         }
     });

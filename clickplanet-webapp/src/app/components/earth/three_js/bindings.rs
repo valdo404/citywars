@@ -291,6 +291,9 @@ extern "C" {
 
     #[wasm_bindgen(method, js_namespace = THREE, js_name = load)]
     pub fn load(this: &TextureLoader, url: &str) -> Texture;
+
+    #[wasm_bindgen(method, js_namespace = THREE, js_name = setCrossOrigin)]
+    pub fn set_cross_origin(this: &TextureLoader, cross_origin: &str);
     
     // Euler for rotation
     #[wasm_bindgen(js_namespace = THREE)]
