@@ -10,54 +10,63 @@ on:
       - main
 
 jobs:
-  build:
-    name: Build and Test
+  native:
+    name: Build and Test Native
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1. Checkout the Repository
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2. Install Protocol Buffers Compiler (protoc)
       - name: Install Protobuf Compiler (protoc)
         run: |
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler
           protoc --version # Print protoc version to confirm installation
 
-      # Step 3. Install Rust (via rustup)
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          components: rustfmt, clippy # Install supplementary tools
+          components: rustfmt, clippy
           override: true
 
-      # Step 4. Install Cargo Dependencies
       - name: Install dependencies
         run: |
           cargo fetch
 
-      # Step 5. Build Native Project
       - name: Build native project
         run: |
           cargo build --verbose --workspace --exclude clickplanet-webapp
 
-      # Step 6. Run Native Tests
       - name: Run native tests
         run: |
           cargo test --verbose --workspace --exclude clickplanet-webapp
 
-      # Step 6. Run Build for WebAssembly frontend
+  webassembly:
+    name: Build WebAssembly
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.sha }}
+        # Version: 3.6.0
+        # Digest: sha256:942562b9c7d4b1f2557f1da21f4d3eb4eb4fd01f2ad78b2a6e187d1b193e0a0f
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          components: rustfmt, clippy # Install supplementary tools
+          override: true
+
       - name: Install Dioxus CLI
         run: |
           cargo install dioxus-cli
-          
-      - name: Install wasm32 target
-        run: |
-          rustup target add wasm32-unknown-unknown
-          
+
       - name: Build WebAssembly with Dioxus
         env:
           CITYWARS_STATIC_SITE: "https://storage.googleapis.com/lv-project-313715-clickwars-static/static"
@@ -76,14 +85,6 @@ jobs:
         with:
           name: clickplanet-webapp
           path: clickplanet-webapp.tar.gz
-
-      # Step 7. Lint and Format (Optional)
-#      - name: Run Clippy (Lint)
-#        run: |
-#          cargo clippy --workspace --all-targets --all-features -- -D warnings
-#      - name: Check formatting
-#        run: |
-#          cargo fmt --all -- --check
 
   docker:
     name: Build Docker Images
