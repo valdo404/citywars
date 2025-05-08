@@ -41,7 +41,6 @@ And finally: Always use the edit tool. If it does not work, read the file first 
 Make sure we use conventional commits
 Do not use interactive rebase (you are an LLM). If a git MCP server does rebases, use it.
 
-Try to use dioxus hot reload. It is does not work, instead of allocating a new port, use or kill the older dioxus instances. If it is just for building, just use cargo check or cargo compile.
 Do not use docker build when building locally.
 
 CITYWARS_STATIC_SITE="https://storage.googleapis.com/lv-project-313715-clickwars-static/static" is the right environnement variable to place in front of RUSTFLAGS="--cfg=web_sys_unstable_apis" cargo build --target wasm32-unknown-unknown or dx serve command.
@@ -60,6 +59,10 @@ When compiling the webapp, the chain should be wasm, and not local machine one.
 
 When you launch a command use the Windsurf terminal API so that I can kill or stop a process by myself.
 
-When downloading a caego or js or sbt dependency, check the latest one using your browser tools, before guessing. Your memory is not up to date.
+When downloading a cargo or js or sbt dependency, check the latest one using your browser tools, before guessing. Your memory is not up to date.
 
 When I say, read the public docs, or review the public docs, you have to do it and use the fucking documentation or the source code of the project.
+
+Do not launch dx serve yourself. I will do it.
+
+Don't make JS code if you can do the same with rust and wasm. Use gloo: timers, utils, etc

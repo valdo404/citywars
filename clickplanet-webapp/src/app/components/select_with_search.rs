@@ -27,7 +27,7 @@ fn get_flag_emoji(country_code: &str) -> String {
         .collect()
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug, serde::Serialize)]
 pub struct Value {
     pub code: String,
     pub name: String,
@@ -84,8 +84,7 @@ pub fn SelectWithSearch(props: SelectWithSearchProps) -> Element {
                 size: "5",
                 {filtered_options.into_iter().map(|v| {
                     let value = v.clone();
-                    // Format the display text with flag emoji outside the RSX macro
-                    let display_text = format!("{}  {}", get_flag_emoji(&v.code), v.name);
+                    let display_text = v.name;
                     
                     rsx!(
                         option {
@@ -94,7 +93,7 @@ pub fn SelectWithSearch(props: SelectWithSearchProps) -> Element {
                                 selected.set(value.clone());
                                 props.on_change.call(value.clone());
                             },
-                            key: "{v.code}", // Unique key for each option
+                            key: "{v.code}",
                             value: "{v.code}",
                             "{display_text}"
                         }

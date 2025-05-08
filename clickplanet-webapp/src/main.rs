@@ -11,19 +11,15 @@ fn main() {
     launch(App);
 }
 
-// Define app routes with Routable trait
 #[derive(Routable, Clone, PartialEq)]
 enum Route {
     #[route("/")]
     Home {},
     
-    
-    // Fallback route for when no other routes match
     #[route("/:..segments")]
     NotFound { segments: Vec<String> },
 }
 
-// Root app component that sets up the router
 #[allow(non_snake_case)]
 fn App() -> Element {
     let import_map = r#"{
@@ -57,7 +53,6 @@ fn App() -> Element {
     }
 }
 
-// Home component with the globe and main UI
 #[component]
 fn Home() -> Element {
     let mut show_welcome_modal = use_signal(|| true);
@@ -132,7 +127,6 @@ fn About() -> Element {
 }
 
 
-// 404 Not Found component
 #[component]
 fn NotFound(segments: Vec<String>) -> Element {
     let url_path = if segments.is_empty() { 
