@@ -2,7 +2,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 use gloo_utils::window;
 use std::cell::RefCell;
-use gloo::render::AnimationFrame;
+use gloo_render::AnimationFrame;
 use gloo_console;
 use log;
 
@@ -88,12 +88,11 @@ pub fn init_globe(canvas: &HtmlCanvasElement) -> Result<(), JsError> {
     let position = camera.position();
     position.set_z(5.0);
     
-    let mut renderer_params = WebGLRendererParams::new();
-    renderer_params.set_canvas(&canvas);
+    let mut renderer_params = WebGLRendererParams::new(&canvas);
     renderer_params.set_antialias(true);
     
-    let js_params: JsValue = JsValue::from(&renderer_params);
-    
+     let js_params = serde_wasm_bindgen::to_value(&renderer_params).unwrap();
+
     let renderer: WebGLRenderer = WebGLRenderer::new_with_parameters(&js_params);
     renderer.set_size(width, height);
     renderer.set_clear_color(0x000000);

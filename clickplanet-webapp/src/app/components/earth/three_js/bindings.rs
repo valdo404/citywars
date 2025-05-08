@@ -1,11 +1,15 @@
 use wasm_bindgen::prelude::*;
 use web_sys::Element;
 use js_sys;
+use serde::Deserialize;
+use serde::Serialize;
 
 #[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
 pub struct WebGLRendererParams {
-    #[wasm_bindgen(skip)]
-    pub canvas: Option<web_sys::HtmlCanvasElement>,
+    #[wasm_bindgen(getter_with_clone)]
+    #[serde(with = "serde_wasm_bindgen::preserve")]
+    pub canvas: web_sys::HtmlCanvasElement,
     
     pub alpha: Option<bool>,
     pub antialias: Option<bool>,
@@ -17,9 +21,9 @@ pub struct WebGLRendererParams {
 #[wasm_bindgen]
 impl WebGLRendererParams {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
+    pub fn new(canvas: &web_sys::HtmlCanvasElement) -> Self {
         Self {
-            canvas: None,
+            canvas: canvas.clone(),
             alpha: None,
             antialias: None,
             depth: None,
@@ -29,7 +33,7 @@ impl WebGLRendererParams {
     }
     
     pub fn set_canvas(&mut self, canvas: &web_sys::HtmlCanvasElement) {
-        self.canvas = Some(canvas.clone());
+        self.canvas = canvas.clone();
     }
     
     pub fn set_alpha(&mut self, alpha: bool) {
@@ -53,45 +57,6 @@ impl WebGLRendererParams {
     }
 }
 
-impl From<&WebGLRendererParams> for JsValue {
-    fn from(params: &WebGLRendererParams) -> Self {
-        let obj = js_sys::Object::new();
-        
-        if let Some(canvas) = &params.canvas {
-            let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("canvas"), canvas);
-        }
-        
-        if let Some(alpha) = params.alpha {
-            let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("alpha"), &JsValue::from_bool(alpha));
-        }
-        
-        if let Some(antialias) = params.antialias {
-            let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("antialias"), &JsValue::from_bool(antialias));
-        }
-        
-        if let Some(depth) = params.depth {
-            let _ = js_sys::Reflect::set(&obj, &JsValue::from_str("depth"), &JsValue::from_bool(depth));
-        }
-        
-        if let Some(premultiplied_alpha) = params.premultiplied_alpha {
-            let _ = js_sys::Reflect::set(
-                &obj, 
-                &JsValue::from_str("premultipliedAlpha"), 
-                &JsValue::from_bool(premultiplied_alpha)
-            );
-        }
-        
-        if let Some(preserve_drawing_buffer) = params.preserve_drawing_buffer {
-            let _ = js_sys::Reflect::set(
-                &obj, 
-                &JsValue::from_str("preserveDrawingBuffer"), 
-                &JsValue::from_bool(preserve_drawing_buffer)
-            );
-        }
-        
-        obj.into()
-    }
-}
 
 #[wasm_bindgen]
 pub struct MeshBasicMaterialParams {
