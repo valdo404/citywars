@@ -41,19 +41,28 @@ And finally: Always use the edit tool. If it does not work, read the file first 
 Make sure we use conventional commits
 Do not use interactive rebase (you are an LLM). If a git MCP server does rebases, use it.
 
-Try to use trunk hot reload. It is does not work, instead of allocating a new port, kill the older trunk instances.
+Do not use docker build when building locally.
+
+CITYWARS_STATIC_SITE="https://storage.googleapis.com/lv-project-313715-clickwars-static/static" is the right environnement variable to place in front of RUSTFLAGS="--cfg=web_sys_unstable_apis" cargo build --target wasm32-unknown-unknown or dx serve command.
 
 the frontend implementation is here: ./original-frontend
 the backend implementation is here: ./original-backend
 
-The download/upload script should use the bucket that is listed in the gcloud storage ls command.
-Do not modify production code for testing purposes, use environment variables instead.
 Pay attention to the environment variables you are using.
-When designing the download/upload script, please take the size of the file in account (70 GB) and the nature of aria2. Which means, we should have enough place on the disk and the memory and we should write concurrently.
-Also please when creating a download volume, think about deleting it after the operation.
-Avoid using download-job/ directory for creating temporary files.
-Do not use memory mount, since we are dealing with a 70 GB file.
-
 Please read the documentation carefully.
 
 Don't put fucking useless comments that are exact duplicates of the code.
+
+Briefly explain what you are doing instead of just calling the tools.
+
+When compiling the webapp, the chain should be wasm, and not local machine one.
+
+When you launch a command use the Windsurf terminal API so that I can kill or stop a process by myself.
+
+When downloading a cargo or js or sbt dependency, check the latest one using your browser tools, before guessing. Your memory is not up to date.
+
+When I say, read the public docs, or review the public docs, you have to do it and use the fucking documentation or the source code of the project.
+
+Do not launch dx serve yourself. I will do it.
+
+Don't make JS code if you can do the same with rust and wasm. Use gloo: timers, utils, etc

@@ -11,6 +11,7 @@ pub struct ModalProps {
     pub close_button_text: Option<String>, // Optional text for the close button
 }
 
+#[allow(non_snake_case)]
 pub fn Modal(props: ModalProps) -> Element {
     rsx!(
         div {

@@ -10,6 +10,7 @@ pub struct OnLoadModalProps {
 }
 
 // Updated for Dioxus 0.6.x compatibility
+#[allow(non_snake_case)]
 pub fn OnLoadModal(props: OnLoadModalProps) -> Element {
     let mut is_open = use_signal(|| true); // Local state to track modal visibility
 

@@ -69,7 +69,6 @@ table {
 }
 
 .button {
-    padding: 18px;
     color: white;
     background: transparent;
     cursor: pointer;
@@ -79,6 +78,10 @@ table {
     font-size: 28px;
     text-shadow: -1px 1px 0 #000000;
     font-family: "Luckiest Guy", sans-serif;
+}
+
+.button-about {
+    padding: 8px;
 }
 
 .button:hover {

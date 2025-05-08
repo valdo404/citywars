@@ -1,0 +1,9 @@
+[build]
+target = "wasm32-unknown-unknown"
+rustflags = ["--cfg=web_sys_unstable_apis"]
+
+[target.wasm32-unknown-unknown]
+runner = "wasm-server-runner"
+
+[env]
+CITYWARS_STATIC_SITE = "https://storage.googleapis.com/lv-project-313715-clickwars-static/static"

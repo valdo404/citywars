@@ -1,22 +1,15 @@
 [application]
-
 name = "clickplanet"
 
 [web.app]
+title = "ClickPlanet"
+script = []
 
-# HTML title tag content
-title = "clickplanet"
-
-# include `assets` in web platform
 [web.resource]
-
-# Additional CSS style files
-style = []
-
 script = []
 
 [web.resource.dev]
-
-# Javascript code file
-# serve: [dev-server] only
 script = []
+
+level = "z"
+debug = false

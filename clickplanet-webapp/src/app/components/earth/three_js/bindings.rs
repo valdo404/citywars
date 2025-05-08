@@ -1,0 +1,492 @@
+use wasm_bindgen::prelude::*;
+use web_sys::Element;
+use js_sys;
+use serde::Deserialize;
+use serde::Serialize;
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct WebGLRendererParams {
+    #[wasm_bindgen(getter_with_clone)]
+    #[serde(with = "serde_wasm_bindgen::preserve")]
+    pub canvas: web_sys::HtmlCanvasElement,
+    
+    pub alpha: Option<bool>,
+    pub antialias: Option<bool>,
+    pub depth: Option<bool>,
+    pub premultiplied_alpha: Option<bool>,
+    pub preserve_drawing_buffer: Option<bool>,
+}
+
+#[wasm_bindgen]
+impl WebGLRendererParams {
+    #[wasm_bindgen(constructor)]
+    pub fn new(canvas: &web_sys::HtmlCanvasElement) -> Self {
+        Self {
+            canvas: canvas.clone(),
+            alpha: None,
+            antialias: None,
+            depth: None,
+            premultiplied_alpha: None,
+            preserve_drawing_buffer: None,
+        }
+    }
+    
+    pub fn set_canvas(&mut self, canvas: &web_sys::HtmlCanvasElement) {
+        self.canvas = canvas.clone();
+    }
+    
+    pub fn set_alpha(&mut self, alpha: bool) {
+        self.alpha = Some(alpha);
+    }
+    
+    pub fn set_antialias(&mut self, antialias: bool) {
+        self.antialias = Some(antialias);
+    }
+    
+    pub fn set_depth(&mut self, depth: bool) {
+        self.depth = Some(depth);
+    }
+    
+    pub fn set_premultiplied_alpha(&mut self, premultiplied_alpha: bool) {
+        self.premultiplied_alpha = Some(premultiplied_alpha);
+    }
+    
+    pub fn set_preserve_drawing_buffer(&mut self, preserve_drawing_buffer: bool) {
+        self.preserve_drawing_buffer = Some(preserve_drawing_buffer);
+    }
+}
+
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct MeshBasicMaterialParams {
+    pub color: Option<u32>,
+    pub wireframe: Option<bool>,
+    pub transparent: Option<bool>,
+    pub opacity: Option<f64>,
+}
+
+#[wasm_bindgen]
+#[derive(Serialize, Deserialize)]
+pub struct MeshStandardMaterialParams {
+    pub color: Option<u32>,
+    pub wireframe: Option<bool>,
+    pub transparent: Option<bool>,
+    pub opacity: Option<f64>,
+    pub roughness: Option<f64>,
+    pub metalness: Option<f64>,
+    pub emissive: Option<u32>,
+    pub side: Option<u32>,
+}
+
+#[wasm_bindgen]
+impl MeshStandardMaterialParams {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self {
+            color: None,
+            wireframe: None,
+            transparent: None,
+            opacity: None,
+            roughness: None,
+            metalness: None,
+            emissive: None,
+            side: None,
+        }
+    }
+    
+    pub fn set_color(&mut self, color: u32) {
+        self.color = Some(color);
+    }
+    
+    pub fn set_wireframe(&mut self, wireframe: bool) {
+        self.wireframe = Some(wireframe);
+    }
+    
+    pub fn set_transparent(&mut self, transparent: bool) {
+        self.transparent = Some(transparent);
+    }
+    
+    pub fn set_opacity(&mut self, opacity: f64) {
+        self.opacity = Some(opacity);
+    }
+    
+    pub fn set_roughness(&mut self, roughness: f64) {
+        self.roughness = Some(roughness);
+    }
+    
+    pub fn set_metalness(&mut self, metalness: f64) {
+        self.metalness = Some(metalness);
+    }
+    
+    pub fn set_emissive(&mut self, emissive: u32) {
+        self.emissive = Some(emissive);
+    }
+    
+    pub fn set_side(&mut self, side: u32) {
+        self.side = Some(side);
+    }
+}
+
+#[wasm_bindgen]
+impl MeshBasicMaterialParams {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self {
+            color: None,
+            wireframe: None,
+            transparent: None,
+            opacity: None,
+        }
+    }
+    
+    pub fn set_color(&mut self, color: u32) {
+        self.color = Some(color);
+    }
+    
+    pub fn set_wireframe(&mut self, wireframe: bool) {
+        self.wireframe = Some(wireframe);
+    }
+    
+    pub fn set_transparent(&mut self, transparent: bool) {
+        self.transparent = Some(transparent);
+    }
+    
+    pub fn set_opacity(&mut self, opacity: f64) {
+        self.opacity = Some(opacity);
+    }
+}
+
+
+#[wasm_bindgen]
+unsafe extern "C" {
+    // Main Three.js namespace
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type Scene;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new() -> Scene;
+
+    #[wasm_bindgen(method, js_namespace = THREE, js_name = add)]
+    pub fn add(this: &Scene, object: &Object3D);
+
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type Object3D;
+    
+    #[wasm_bindgen(method, getter, js_namespace = THREE)]
+    pub fn rotation(this: &Object3D) -> Euler;
+
+    #[wasm_bindgen(extends = Object3D, js_namespace = THREE)]
+    pub type Mesh;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new_with_geometry_material(geometry: &BufferGeometry, material: &Material) -> Mesh;
+
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type WebGLRenderer;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new() -> WebGLRenderer;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new_with_parameters(params:WebGLRendererParams) -> WebGLRenderer;
+
+    #[wasm_bindgen(method, js_namespace = THREE, js_name = setSize)]
+    pub fn set_size(this: &WebGLRenderer, width: f64, height: f64);
+
+    #[wasm_bindgen(method, js_namespace = THREE, js_name = setClearColor)]
+    pub fn set_clear_color(this: &WebGLRenderer, color: u32);
+
+    #[wasm_bindgen(method, getter, js_namespace = THREE, js_name = domElement)]
+    pub fn dom_element(this: &WebGLRenderer) -> Element;
+
+    // Generic render method that can handle any camera type by using JsValue
+    #[wasm_bindgen(method, js_namespace = THREE, js_name = render)]
+    pub fn render(this: &WebGLRenderer, scene: &Scene, camera: &JsValue);
+
+    #[wasm_bindgen(method, js_namespace = THREE, js_name = dispose)]
+    pub fn dispose(this: &WebGLRenderer);
+    
+    // PerspectiveCamera for the cube example
+    #[wasm_bindgen(extends = Object3D, js_namespace = THREE)]
+    pub type PerspectiveCamera;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new(fov: f64, aspect: f64, near: f64, far: f64) -> PerspectiveCamera;
+    
+    #[wasm_bindgen(method, getter, js_namespace = THREE, js_name = position)]
+    pub fn position(this: &PerspectiveCamera) -> Vector3;
+
+    #[wasm_bindgen(extends = Object3D, js_namespace = THREE)]
+    pub type OrthographicCamera;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new(left: f64, right: f64, top: f64, bottom: f64, near: f64, far: f64) -> OrthographicCamera;
+
+    #[wasm_bindgen(method, getter, js_namespace = THREE, js_name = position)]
+    pub fn position(this: &OrthographicCamera) -> Vector3;
+
+    #[wasm_bindgen(method, js_namespace = THREE, js_name = updateProjectionMatrix)]
+    pub fn update_projection_matrix(this: &OrthographicCamera);
+
+    #[wasm_bindgen(method, getter, js_namespace = THREE)]
+    pub fn zoom(this: &OrthographicCamera) -> f64;
+
+    #[wasm_bindgen(method, setter, js_namespace = THREE)]
+    pub fn set_left(this: &OrthographicCamera, left: f64);
+
+    #[wasm_bindgen(method, setter, js_namespace = THREE)]
+    pub fn set_right(this: &OrthographicCamera, right: f64);
+
+    #[wasm_bindgen(method, setter, js_namespace = THREE)]
+    pub fn set_top(this: &OrthographicCamera, top: f64);
+
+    #[wasm_bindgen(method, setter, js_namespace = THREE)]
+    pub fn set_bottom(this: &OrthographicCamera, bottom: f64);
+
+    #[wasm_bindgen(extends = Object3D, js_namespace = THREE)]
+    pub type AmbientLight;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new(color: u32, intensity: f64) -> AmbientLight;
+
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type BufferGeometry;
+    
+    #[wasm_bindgen(js_namespace = THREE, extends = BufferGeometry)]
+    pub type BoxGeometry;
+    
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new(width: f64, height: f64, depth: f64) -> BoxGeometry;
+
+    #[wasm_bindgen(js_namespace = THREE, extends = BufferGeometry)]
+    pub type PolyhedronGeometry;
+
+    #[wasm_bindgen(js_namespace = THREE, extends = PolyhedronGeometry, extends = BufferGeometry)]
+    pub type IcosahedronGeometry;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new(radius: f64, detail: u32) -> IcosahedronGeometry;
+    
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type Material;
+    
+    #[wasm_bindgen(js_namespace = THREE, extends = Material)]
+    pub type MeshBasicMaterial;
+    
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new_with_params(params: MeshBasicMaterialParams) -> MeshBasicMaterial;
+
+    #[wasm_bindgen(js_namespace = THREE, extends = Material)]
+    pub type MeshStandardMaterial;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new_with_params(params: MeshStandardMaterialParams) -> MeshStandardMaterial;
+    
+    #[wasm_bindgen(method, setter, js_namespace = THREE)]
+    pub fn set_map(this: &MeshStandardMaterial, map: &Texture);
+    
+    #[wasm_bindgen(method, setter, js_namespace = THREE, js_name = needsUpdate)]
+    pub fn set_needs_update(this: &MeshStandardMaterial, needs_update: bool);
+    
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type Texture;
+
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type TextureLoader;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new() -> TextureLoader;
+
+    // Single load method with all parameters
+    // When calling this method, you can pass JsValue::UNDEFINED for callbacks you don't need
+    #[wasm_bindgen(method, js_namespace = THREE, js_name = load)]
+    pub fn load_with_callbacks(this: &TextureLoader, url: &str, on_load: &JsValue, on_progress: &JsValue, on_error: &JsValue) -> Texture;
+    
+    // Convenience method for simple loading without callbacks
+    #[wasm_bindgen(method, js_namespace = THREE, js_name = load)]
+    pub fn load(this: &TextureLoader, url: &str) -> Texture;
+
+    #[wasm_bindgen(method, js_namespace = THREE, js_name = setCrossOrigin)]
+    pub fn set_cross_origin(this: &TextureLoader, cross_origin: &str);
+    
+    // Euler for rotation
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type Euler;
+    
+    #[wasm_bindgen(method, getter, js_namespace = THREE)]
+    pub fn x(this: &Euler) -> f64;
+    
+    #[wasm_bindgen(method, getter, js_namespace = THREE)]
+    pub fn y(this: &Euler) -> f64;
+    
+    #[wasm_bindgen(method, setter, js_namespace = THREE)]
+    pub fn set_x(this: &Euler, x: f64);
+    
+    #[wasm_bindgen(method, setter, js_namespace = THREE)]
+    pub fn set_y(this: &Euler, y: f64);
+
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type Vector3;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new(x: f64, y: f64, z: f64) -> Vector3;
+
+    #[wasm_bindgen(method, setter, js_namespace = THREE)]
+    pub fn set_z(this: &Vector3, z: f64);
+
+    #[wasm_bindgen(js_namespace = THREE)]
+    pub type Vector2;
+
+    #[wasm_bindgen(constructor, js_namespace = THREE)]
+    pub fn new(x: f64, y: f64) -> Vector2;
+
+}
+
+// Function to check if Three.js is available in the global scope
+pub fn is_three_available() -> bool {
+    js_sys::eval("typeof THREE !== 'undefined'").unwrap().as_bool().unwrap_or(false)
+}
+
+pub fn diagnose_three_js_loading() -> String {
+    use wasm_bindgen::prelude::*;
+    use web_sys::console;
+    
+    let diagnostic_script = r#"(function() { 
+        let results = {
+            three: {
+                available: false,
+                version: null,
+                error: null
+            },
+            orbitControls: {
+                available: false,
+                error: null
+            },
+            scripts: []
+        };
+        
+        // Check for all script tags loaded
+        document.querySelectorAll('script').forEach(script => {
+            if (script.src) {
+                results.scripts.push(script.src);
+            }
+        });
+        
+        // Check THREE
+        try {
+            if (typeof THREE !== 'undefined') {
+                results.three.available = true;
+                results.three.version = THREE.REVISION || 'unknown';
+            }
+        } catch(err) {
+            results.three.error = err.toString();
+        }
+        
+        // Check OrbitControls - when using ES modules, it should be exposed as a global via our script
+        try {
+            if (typeof OrbitControls !== 'undefined') {
+                results.orbitControls.available = true;
+            } else {
+                results.orbitControls.error = 'OrbitControls is not defined in global scope';
+                // If THREE is available but not OrbitControls, provide more context
+                if (typeof THREE !== 'undefined') {
+                    results.orbitControls.note = 'THREE is loaded but OrbitControls was not properly exposed to the global scope';
+                } else {
+                    results.orbitControls.note = 'THREE is not loaded, so OrbitControls cannot be used';
+                }
+            }
+        } catch(err) {
+            results.orbitControls.error = err.toString();
+        }
+        
+        return JSON.stringify(results);
+    })()
+    "#;
+    
+    // Execute the diagnostic script
+    if let Ok(result) = js_sys::eval(diagnostic_script) {
+        if let Some(result_str) = result.as_string() {
+            console::log_1(&JsValue::from_str(&format!("THREE diagnostic result: {}", result_str)));
+            return result_str;
+        }
+    }
+    
+    console::log_1(&JsValue::from_str("Failed to run diagnostic script"));
+    "Failed to run diagnostic script".to_string()
+}
+
+// SphereGeometry bindings
+#[wasm_bindgen]
+extern "C" {
+    pub type SphereGeometry;
+
+    #[wasm_bindgen(constructor)]
+    pub fn new(radius: f64, width_segments: u32, height_segments: u32) -> SphereGeometry;
+}
+
+// OrbitControls bindings - using standard imports
+#[wasm_bindgen]
+extern "C" {
+    pub type OrbitControls;
+
+    #[wasm_bindgen(constructor)]
+    pub fn new(camera: &OrthographicCamera, dom_element: &Element) -> OrbitControls;
+
+    #[wasm_bindgen(method)]
+    pub fn update(this: &OrbitControls);
+
+    // Min zoom getter/setter
+    #[wasm_bindgen(method, getter, js_name = "minZoom")]
+    pub fn min_zoom(this: &OrbitControls) -> f64;
+    
+    #[wasm_bindgen(method, setter, js_name = "minZoom")]
+    pub fn set_min_zoom(this: &OrbitControls, min_zoom: f64);
+
+    #[wasm_bindgen(method, getter, js_name = "maxZoom")]
+    pub fn max_zoom(this: &OrbitControls) -> f64;
+    
+    #[wasm_bindgen(method, setter, js_name = "maxZoom")]
+    pub fn set_max_zoom(this: &OrbitControls, max_zoom: f64);
+
+    // Pan speed getter/setter
+    #[wasm_bindgen(method, getter, js_name = "panSpeed")]
+    pub fn pan_speed(this: &OrbitControls) -> f64;
+    
+    #[wasm_bindgen(method, setter, js_name = "panSpeed")]
+    pub fn set_pan_speed(this: &OrbitControls, speed: f64);
+
+    #[wasm_bindgen(method, getter, js_name = "zoomSpeed")]
+    pub fn zoom_speed(this: &OrbitControls) -> f64;
+    
+    #[wasm_bindgen(method, setter, js_name = "zoomSpeed")]
+    pub fn set_zoom_speed(this: &OrbitControls, speed: f64);
+
+    #[wasm_bindgen(method, getter, js_name = "enableDamping")]
+    pub fn enable_damping(this: &OrbitControls) -> bool;
+    
+    #[wasm_bindgen(method, setter, js_name = "enableDamping")]
+    pub fn set_enable_damping(this: &OrbitControls, enable: bool);
+
+    #[wasm_bindgen(method, getter, js_name = "autoRotate")]
+    pub fn auto_rotate(this: &OrbitControls) -> bool;
+    
+    #[wasm_bindgen(method, setter, js_name = "autoRotate")]
+    pub fn set_auto_rotate(this: &OrbitControls, auto_rotate: bool);
+
+    #[wasm_bindgen(method, getter, js_name = "autoRotateSpeed")]
+    pub fn auto_rotate_speed(this: &OrbitControls) -> f64;
+    
+    #[wasm_bindgen(method, setter, js_name = "autoRotateSpeed")]
+    pub fn set_auto_rotate_speed(this: &OrbitControls, speed: f64);
+
+    #[wasm_bindgen(method, getter, js_name = "rotateSpeed")]
+    pub fn rotate_speed(this: &OrbitControls) -> f64;
+    
+    #[wasm_bindgen(method, setter, js_name = "rotateSpeed")]
+    pub fn set_rotate_speed(this: &OrbitControls, speed: f64);
+
+    #[wasm_bindgen(method, js_name = addEventListener)]
+    pub fn add_event_listener(this: &OrbitControls, event_name: &str, callback: &Closure<dyn FnMut()>);
+}

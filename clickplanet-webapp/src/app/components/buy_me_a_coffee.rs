@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 // In Dioxus 0.6.x, components are defined as regular functions
+#[allow(non_snake_case)]
 pub fn BuyMeACoffee() -> Element {
     rsx!(
         a {

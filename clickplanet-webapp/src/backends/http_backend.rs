@@ -5,13 +5,12 @@ use std::sync::{Arc, Mutex};
 use crate::backends::backend::{Ownerships, OwnershipsGetter, TileClicker, Update, UpdatesListener};
 use anyhow::Result;
 use base64::engine::general_purpose;
-use clickplanet_proto::clicks::{BatchRequest, ClickRequest, OwnershipState};
+use clickplanet_proto::clicks::ClickRequest;
 use prost::Message;
 use uuid::Uuid;
 
 // WebAssembly compatible imports
 use gloo_net::http::Request;
-use gloo::timers::callback::Timeout;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{MessageEvent, WebSocket};
@@ -85,7 +84,7 @@ pub struct HTTPBackend {
 #[allow(dead_code)]
 impl HTTPBackend {
 
-    pub fn new(client: ClickServiceClient, batch_update_duration_ms: u64) -> Self {
+    pub fn new(client: ClickServiceClient, _batch_update_duration_ms: u64) -> Self {
         // Create a simplified version without the problematic timer
         let backend = Self {
             client,
@@ -144,7 +143,7 @@ impl OwnershipsGetter for HTTPBackend {
         // Move the callback into an Arc once, outside the loop
         let callback = std::sync::Arc::new(callback);
         
-        for i in (1..max_index).step_by(batch_size) {
+        for _i in (1..max_index).step_by(batch_size) {
             // Clone the Arc for this iteration
             let callback_ref = callback.clone();
             
@@ -221,6 +220,7 @@ impl UpdatesListener for HTTPBackend {
 
 
 // WebAssembly-compatible WebSocket initialization
+#[allow(dead_code)]
 fn init_websocket(url: &str, mut callback: Box<dyn FnMut(Vec<u8>)>) -> WebSocket {
     // Added 'mut' keyword to the callback parameter to fix mutable borrow error
     let ws = WebSocket::new(url).unwrap();

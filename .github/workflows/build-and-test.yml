@@ -10,66 +10,110 @@ on:
       - main
 
 jobs:
-  build:
-    name: Build and Test
+  native:
+    name: Build and Test Native
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1. Checkout the Repository
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2. Install Protocol Buffers Compiler (protoc)
       - name: Install Protobuf Compiler (protoc)
         run: |
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler
-          protoc --version # Print protoc version to confirm installation
+          protoc --version
 
-      # Step 3. Install Rust (via rustup)
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          components: rustfmt, clippy # Install supplementary tools
+          components: rustfmt, clippy
           override: true
 
-      # Step 4. Install Cargo Dependencies
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-native-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-native-
+
       - name: Install dependencies
         run: |
           cargo fetch
 
-      # Step 5. Build the Project
-      - name: Build the project
+      - name: Build native project
         run: |
-          cargo build --verbose --workspace
+          cargo build --verbose --workspace --exclude clickplanet-webapp
 
-      # Step 6. Run Tests
-      - name: Run tests
+      - name: Run native tests
         run: |
-          cargo test --verbose --workspace
+          cargo test --verbose --workspace --exclude clickplanet-webapp
 
-      # Step 6. Run Build for WebAssembly frontend
-      - name: Install Trunk
+  webassembly:
+    name: Build WebAssembly
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          components: rustfmt, clippy
+          override: true
+
+      - name: Install Protobuf Compiler (protoc)
         run: |
-          cargo install trunk --locked
-          
-      - name: Install wasm32 target
-        run: |
-          rustup target add wasm32-unknown-unknown
-          
-      - name: Build WebAssembly with Trunk
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          protoc --version
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-wasm-
+
+      - name: Install Dioxus CLI
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: dioxus-cli
+
+      - name: Build WebAssembly with Dioxus
+        env:
+          CITYWARS_STATIC_SITE: "https://storage.googleapis.com/lv-project-313715-clickwars-static/static"
+          RUSTFLAGS: "--cfg=web_sys_unstable_apis"
         run: |
           cd clickplanet-webapp
-          trunk build --release
+          dx build --release
+          mkdir -p dist
+          cp -r ../target/dx/clickplanet-webapp/release/web/public/* dist/
 
-      # Step 7. Lint and Format (Optional)
-#      - name: Run Clippy (Lint)
-#        run: |
-#          cargo clippy --workspace --all-targets --all-features -- -D warnings
-#      - name: Check formatting
-#        run: |
-#          cargo fmt --all -- --check
+      - name: Package WASM
+        run: |
+          cd clickplanet-webapp/dist
+          tar czf ../../clickplanet-webapp.tar.gz .
+
+      - name: Upload WASM Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: clickplanet-webapp
+          path: clickplanet-webapp.tar.gz
 
   docker:
     name: Build Docker Images
