@@ -39,29 +39,50 @@ jobs:
         run: |
           cargo fetch
 
-      # Step 5. Build the Project
-      - name: Build the project
+      # Step 5. Build Native Project
+      - name: Build native project
         run: |
-          cargo build --verbose --workspace
+          cargo build --verbose --workspace --exclude clickplanet-webapp
 
-      # Step 6. Run Tests
-      - name: Run tests
+      # Step 6. Run Native Tests
+      - name: Run native tests
         run: |
-          cargo test --verbose --workspace
+          cargo test --verbose --workspace --exclude clickplanet-webapp
 
       # Step 6. Run Build for WebAssembly frontend
-      - name: Install Trunk
+      - name: Install Dioxus CLI
         run: |
-          cargo install trunk --locked
+          cargo install dioxus-cli
           
       - name: Install wasm32 target
         run: |
           rustup target add wasm32-unknown-unknown
           
-      - name: Build WebAssembly with Trunk
+      - name: Build WebAssembly with Dioxus
+        env:
+          CITYWARS_STATIC_SITE: "https://storage.googleapis.com/lv-project-313715-clickwars-static/static"
+          RUSTFLAGS: "--cfg=web_sys_unstable_apis"
         run: |
           cd clickplanet-webapp
-          trunk build --release
+          dx build --release
+
+      - name: Package WASM
+        run: |
+          cd clickplanet-webapp/dist
+          tar czf ../../clickplanet-webapp.tar.gz .
+
+      - name: Upload WASM Package
+        uses: actions/upload-artifact@v3
+        with:
+          name: clickplanet-webapp
+          path: clickplanet-webapp.tar.gz
+
+      - name: Upload to GitHub Packages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v3
+        with:
+          name: clickplanet-webapp-${{ github.sha }}
+          path: clickplanet-webapp.tar.gz
 
       # Step 7. Lint and Format (Optional)
 #      - name: Run Clippy (Lint)
