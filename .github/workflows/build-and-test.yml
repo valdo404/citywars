@@ -76,9 +76,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler
-          protoc --version # Print protoc version to confirm installation
+          protoc --version
 
-      # Step 4. Cache Dependencies
       - name: Cache Rust dependencies
         uses: actions/cache@v4
         with:
@@ -102,6 +101,8 @@ jobs:
         run: |
           cd clickplanet-webapp
           dx build --release
+          mkdir -p dist
+          cp -r ../target/dx/clickplanet-webapp/release/web/public/* dist/
 
       - name: Package WASM
         run: |
