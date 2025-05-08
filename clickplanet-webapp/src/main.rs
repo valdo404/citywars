@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus::document::Stylesheet;
-use crate::app::countries::Country;
+use crate::app::countries::{Country, CountryRepository};
 
 mod app;
 mod backends;
@@ -62,13 +62,8 @@ fn App() -> Element {
 fn Home() -> Element {
     let mut show_welcome_modal = use_signal(|| true);
     
-    // Manage country state here, similar to the original TypeScript implementation
-    let mut country = use_signal(|| Country {
-        name: "United States".to_string(),
-        code: "us".to_string(),
-    });
+    let mut country = use_signal(|| CountryRepository::load_selected());
     
-    // Callback to update country
     let set_country = move |new_country: Country| {
         country.set(new_country);
     };

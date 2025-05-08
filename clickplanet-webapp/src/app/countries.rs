@@ -1,27 +1,53 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use wasm_bindgen::prelude::*;
+use gloo_storage::{LocalStorage, Storage};
+use gloo_net::http::Request;
 
+/// Country data structure
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Country {
     pub name: String,
     pub code: String,
 }
 
-#[wasm_bindgen]
-pub struct CountriesMap {
-    countries: HashMap<String, Country>,
-}
+const STORAGE_KEY: &str = "clickplanet-country";
 
-#[wasm_bindgen]
-impl CountriesMap {
-    #[wasm_bindgen(constructor)]
-    pub fn new(data: JsValue) -> CountriesMap {
-        let countries_data: HashMap<String, String> = serde_wasm_bindgen::from_value(data)
-            .map_err(|e| js_sys::Error::new(&e.to_string()))
-            .unwrap_throw();
+/// Country repository
+pub struct CountryRepository;
 
-        let countries: HashMap<String, Country> = countries_data
+impl CountryRepository {
+    pub fn default_country() -> Country {
+        Country {
+            name: String::from("🇺🇸 United States"),
+            code: String::from("us"),
+        }
+    }
+
+    pub fn load_selected() -> Country {
+        LocalStorage::get(STORAGE_KEY).unwrap_or_else(|_| Self::default_country())
+    }
+
+    pub fn save_selected(country: &Country) -> Result<(), String> {
+        LocalStorage::set(STORAGE_KEY, country)
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn load_all() -> Result<HashMap<String, Country>, String> {
+        let static_site = env!("CITYWARS_STATIC_SITE");
+        let url = format!("{}/countries/countries.json", static_site);
+        
+        let resp = Request::get(&url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+            
+        let countries_data: HashMap<String, String> = resp.json()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        log::debug!("Loaded {} countries", countries_data.len());
+        
+        Ok(countries_data
             .into_iter()
             .map(|(code, name)| {
                 (code.clone(), Country {
@@ -29,31 +55,6 @@ impl CountriesMap {
                     code,
                 })
             })
-            .collect();
-
-        CountriesMap { countries }
-    }
-
-    pub fn get(&self, code: &str) -> JsValue {
-        match self.countries.get(code) {
-            Some(country) => serde_wasm_bindgen::to_value(country).unwrap(),
-            None => JsValue::null(),
-        }
-    }
-
-    pub fn contains_key(&self, code: &str) -> bool {
-        self.countries.contains_key(code)
-    }
-
-    pub fn keys(&self) -> Vec<String> {
-        self.countries.keys().cloned().collect()
-    }
-
-    pub fn len(&self) -> usize {
-        self.countries.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.countries.is_empty()
+            .collect())
     }
 }
