@@ -1,5 +1,6 @@
 use crate::geolookup::CountryTilesMap;
 use clickplanet_client::TileCount;
+use clickplanet_client::ClickPlanetClient;
 use futures_util::stream::BoxStream;
 use futures_util::{StreamExt, TryStreamExt};
 use rand::Rng;
