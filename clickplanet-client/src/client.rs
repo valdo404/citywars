@@ -14,7 +14,11 @@ use serde_json::json;
 use reqwest::Client;
 
 #[cfg(not(target_arch = "wasm32"))]
-use tokio_tungstenite::tungstenite::http::Uri;
+use {
+    tokio_tungstenite::tungstenite,
+    http::Request,
+    tokio_tungstenite,
+};
 
 #[cfg(target_arch = "wasm32")]
 use http::Uri;
@@ -42,6 +46,16 @@ type DynError = Box<dyn std::error::Error + Send + Sync>;
 #[cfg(target_arch = "wasm32")]
 type DynError = Box<dyn std::error::Error>;
 
+#[cfg(not(target_arch = "wasm32"))]
+#[async_trait::async_trait]
+pub trait ClickPlanetClient {
+    async fn click_tile(&self, tile_id: u32, country_id: &str) -> Result<(), DynError>;
+    async fn get_ownerships_by_batch(&self, start_tile_id: u32, end_tile_id: u32) -> Result<clicks::OwnershipState, DynError>;
+    async fn get_ownerships(&self, index_coordinates: &Arc<dyn TileCount + Send + Sync>) -> Result<clicks::OwnershipState, DynError>;
+    async fn listen_for_updates(&self) -> Result<BoxStream<'_, clicks::UpdateNotification>, DynError>;
+}
+
+#[cfg(target_arch = "wasm32")]
 #[async_trait::async_trait(?Send)]
 pub trait ClickPlanetClient {
     async fn click_tile(&self, tile_id: u32, country_id: &str) -> Result<(), DynError>;
@@ -125,7 +139,7 @@ impl ClickPlanetRestClient {
             let client = self;
             async move {
                 loop {
-                    match Self::create_websocket_stream(client).await {
+                    match client.create_websocket_connection().await {
                         Ok(stream) => return Some((stream, ())),
                         Err(e) => {
                             eprintln!("Error in WebSocket connection: {}. Retrying...", e);
@@ -141,7 +155,7 @@ impl ClickPlanetRestClient {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    async fn create_websocket_stream(&self) -> Result<BoxStream<'_, clicks::UpdateNotification>, DynError> {
+    async fn create_websocket_connection(&self) -> Result<BoxStream<'_, clicks::UpdateNotification>, DynError> {
         let config = WebSocketConfig::default();
 
         let retry_strategy = ExponentialBackoff::from_millis(config.initial_interval.as_millis() as u64)
@@ -151,10 +165,24 @@ impl ClickPlanetRestClient {
         let result = Retry::spawn(retry_strategy, || async {
             let ws_url = format!("{}://{}:{}/v2/ws/listen", if self.secure { "wss" } else { "ws" }, self.host, self.port);
 
-            let url = ws_url.parse::<Uri>().map_err(|e| Box::new(e) as DynError)?;
-
-            println!("Attempting WebSocket connection...");
-            let (ws_stream, _) = connect_async(url).await
+            println!("Attempting WebSocket connection to {}", ws_url);
+            
+            let url = url::Url::parse(&ws_url).map_err(|e| Box::new(e) as DynError)?;
+            
+            // Create a proper request with WebSocket headers
+            let request = Request::builder()
+                .uri(url.as_str())
+                .header("User-Agent", CLIENT_NAME)
+                .header("Origin", format!("{}://{}:{}", if self.secure { "https" } else { "http" }, self.host, self.port))
+                .header("Host", self.host.clone())
+                .header("Connection", "Upgrade")
+                .header("Upgrade", "websocket")
+                .header("Sec-WebSocket-Version", "13")
+                .header("Sec-WebSocket-Key", generate_websocket_key())
+                .body(())
+                .map_err(|e| Box::new(e) as DynError)?;
+            
+            let (ws_stream, _) = tokio_tungstenite::connect_async(request).await
                 .map_err(|e| {
                     println!("Connection attempt failed: {:?}", e);
                     Box::new(e) as DynError
@@ -170,12 +198,19 @@ impl ClickPlanetRestClient {
             .filter_map(|message| async move {
                 match message {
                     Ok(msg) => {
-                        match clicks::UpdateNotification::decode(&*msg.into_data()) {
-                            Ok(notification) => Some(notification),
-                            Err(e) => {
-                                eprintln!("Error decoding message: {}", e);
-                                None
+                        if let tungstenite::Message::Binary(data) = msg {
+                            match clicks::UpdateNotification::decode(&data[..]) {
+                                Ok(notification) => {
+                                    println!("Received notification for tile {} => country {}", notification.tile_id, notification.country_id);
+                                    Some(notification)
+                                }
+                                Err(e) => {
+                                    eprintln!("Error decoding protobuf: {}", e);
+                                    None
+                                }
                             }
+                        } else {
+                            None
                         }
                     },
                     Err(e) => {
@@ -289,6 +324,11 @@ impl ClickPlanetRestClient {
     // No need for a separate create_update_stream method
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[async_trait::async_trait]
+impl ClickPlanetClient for ClickPlanetRestClient {
+    
+#[cfg(target_arch = "wasm32")]
 #[async_trait::async_trait(?Send)]
 impl ClickPlanetClient for ClickPlanetRestClient {
     async fn click_tile(&self, tile_id: u32, country_id: &str) -> Result<(), DynError> {
