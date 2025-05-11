@@ -839,6 +839,7 @@ dependencies = [
  "tokio",
  "tokio-retry",
  "tokio-tungstenite 0.24.0",
+ "tungstenite 0.26.2",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
