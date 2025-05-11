@@ -822,11 +822,15 @@ dependencies = [
  "base64 0.21.7",
  "clickplanet-proto",
  "futures",
+ "futures-channel",
  "futures-util",
+ "getrandom 0.2.15",
+ "gloo-timers",
+ "gloo-utils",
  "imp",
+ "js-sys",
  "prost",
  "rand 0.8.5",
- "rayon",
  "reqwest",
  "serde",
  "serde_json",
@@ -834,6 +838,9 @@ dependencies = [
  "tokio-retry",
  "tokio-tungstenite 0.24.0",
  "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

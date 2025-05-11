@@ -1,29 +1,42 @@
-use futures::stream::{BoxStream, SplitStream};
+use futures::stream::BoxStream;
 use prost::Message;
 use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio_tungstenite::{
-    connect_async,
-    tungstenite::http::Request,
-    MaybeTlsStream,
-    WebSocketStream,
-};
 
 use base64::{engine::general_purpose::STANDARD, DecodeError, Engine as _};
 use clickplanet_proto::clicks;
-use clickplanet_proto::clicks::OwnershipState;
 use clickplanet_proto::clicks::*;
 use futures::StreamExt;
 use rand::Rng;
-use reqwest::Client;
 use serde::Deserialize;
 use serde_json::json;
-use tokio::net::TcpStream;
-use tokio::time::sleep;
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
-use tokio_retry::Retry;
-use url::Url;
+use reqwest::Client;
+use reqwest::Url;
+use reqwest::Request;
+
+#[cfg(not(target_arch = "wasm32"))]
+use {
+    futures::stream::SplitStream,
+    tokio::net::TcpStream,
+    tokio_tungstenite::{
+        connect_async,
+        MaybeTlsStream,
+        WebSocketStream,
+    },
+    tokio_retry::strategy::{jitter, ExponentialBackoff},
+    tokio_retry::Retry,
+    tokio::time::sleep as tokio_sleep,
+};
+
+#[cfg(target_arch = "wasm32")]
+use {
+    wasm_bindgen::prelude::*,
+    wasm_bindgen_futures::JsFuture,
+    web_sys::{MessageEvent, WebSocket},
+    js_sys::{ArrayBuffer, Uint8Array},
+    gloo_timers::future::sleep as gloo_sleep,
+};
 
 pub trait TileCount {
     fn len(&self) -> usize;
@@ -64,13 +77,24 @@ pub const CLIENT_NAME: &'static str = "clickplanet client owned by valdo404";
 
 impl ClickPlanetRestClient {
     pub fn new(base_url: &str, port: u16, secure: bool) -> Self {
-        let client = Client::builder()
-            .pool_idle_timeout(Duration::from_secs(30))
-            .pool_max_idle_per_host(32)
-            .timeout(Duration::from_secs(10))
-            .connect_timeout(Duration::from_secs(5))
-            .build()
-            .expect("Failed to create HTTP client");
+        let client = {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                Client::builder()
+                    .pool_idle_timeout(Duration::from_secs(30))
+                    .pool_max_idle_per_host(32)
+                    .timeout(Duration::from_secs(10))
+                    .connect_timeout(Duration::from_secs(5))
+                    .build()
+                    .expect("Failed to create HTTP client")
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                Client::builder()
+                    .build()
+                    .expect("Failed to create HTTP client")
+            }
+        };
 
         Self {
             client: Arc::new(client),
@@ -195,8 +219,11 @@ impl ClickPlanetRestClient {
             let end_tile_id = (start_tile_id + BATCH_SIZE).min(max_tile_id);
 
             let millis = rand::thread_rng().gen_range(300..=1000);
+            #[cfg(not(target_arch = "wasm32"))]
+            tokio_sleep(Duration::from_millis(millis)).await;
+            #[cfg(target_arch = "wasm32")]
             sleep(Duration::from_millis(millis)).await;
-
+        
             let result: Result<OwnershipState, Box<dyn Error + Send + Sync>> = self.get_ownerships_by_batch(start_tile_id, end_tile_id).await;
 
             match result {
@@ -211,7 +238,10 @@ impl ClickPlanetRestClient {
                             eprintln!("HTTP Status: {}", status);
                             if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
                                 eprintln!("Rate limit hit, waiting before retry...");
-                                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                                #[cfg(not(target_arch = "wasm32"))]
+                                tokio_sleep(Duration::from_secs(5)).await;
+                                #[cfg(target_arch = "wasm32")]
+                                sleep(Duration::from_secs(5)).await;
                                 continue; // Retry this batch
                             }
                         }
@@ -233,6 +263,7 @@ impl ClickPlanetRestClient {
         Ok(final_state)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn connect_websocket(&self) -> Result<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, Box<dyn std::error::Error + Send + Sync>> {
         let config = WebSocketConfig::default();
 
@@ -272,28 +303,78 @@ impl ClickPlanetRestClient {
         Ok(read)
     }
 
-    pub async fn listen_for_updates(&self) -> Result<BoxStream<'_, clicks::UpdateNotification>, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let stream = Box::pin(futures::stream::unfold((), move |_| {
-            let client = self;  // No need to clone here
-            async move {
-                loop {
-                    match Self::create_update_stream(client).await {
-                        Ok(stream) => return Some((stream, ())),
-                        Err(e) => {
-                            eprintln!("Error in WebSocket connection: {}. Retrying...", e);
-                            tokio::time::sleep(Duration::from_secs(1)).await;
-                        }
+    #[cfg(target_arch = "wasm32")]
+    pub async fn connect_websocket(&self) -> Result<WebSocket, Box<dyn std::error::Error>> {
+        let config = WebSocketConfig::default();
+        let mut retry_count = 0;
+        let max_retries = 5;
+
+        loop {
+            let ws_url = format!("{}://{}:{}/v2/ws/listen", if self.secure { "wss" } else { "ws" }, self.host, self.port);
+
+            let ws = match WebSocket::new(&ws_url) {
+                Ok(ws) => ws,
+                Err(e) => {
+                    if retry_count >= max_retries {
+                        return Err(format!("WebSocket error: {:?}", e).into());
                     }
+                    let delay = config.initial_interval.as_millis() as u32 * (1 << retry_count);
+                    sleep(Duration::from_millis(delay as u64)).await;
+                    retry_count += 1;
+                    continue;
+                }
+            };
+
+            // Set binary type to arraybuffer for protobuf messages
+            ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
+
+            let promise = js_sys::Promise::new(&mut |resolve, reject| {
+                let onopen = Closure::once_into_js(move || resolve.call0(&JsValue::NULL).unwrap_or_default());
+                let onerror = Closure::once_into_js(move |e| reject.call1(&JsValue::NULL, &e).unwrap_or_default());
+
+                ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
+                ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
+            });
+
+            match JsFuture::from(promise).await {
+                Ok(_) => return Ok(ws),
+                Err(e) => {
+                    if retry_count >= max_retries {
+                        return Err(format!("WebSocket error: {:?}", e).into());
+                    }
+                    let delay = config.initial_interval.as_millis() as u32 * (1 << retry_count);
+                    sleep(Duration::from_millis(delay as u64)).await;
+                    retry_count += 1;
+                    continue;
                 }
             }
-        })
-            .flat_map(|stream| stream));
+        }
+    }
 
-        Ok(stream.boxed())
+    #[cfg(target_arch = "wasm32")]
+    pub async fn listen_for_updates(&self) -> Result<BoxStream<'_, clicks::UpdateNotification>, Box<dyn std::error::Error>> {
+        let ws = self.connect_websocket().await?;
+        let (sender, receiver) = futures::channel::mpsc::unbounded();
+
+        let onmessage = Closure::wrap(Box::new(move |e: MessageEvent| {
+            if let Ok(abuf) = e.data().dyn_into::<ArrayBuffer>() {
+                let array = Uint8Array::new(&abuf);
+                let data = array.to_vec();
+                if let Ok(notification) = clicks::UpdateNotification::decode(&data[..]) {
+                    sender.unbounded_send(notification).unwrap_or_else(|e| {
+                        web_sys::console::error_1(&format!("Failed to send notification: {}", e).into());
+                    });
+                }
+            }
+        }) as Box<dyn FnMut(MessageEvent)>);
+
+        ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+        onmessage.forget(); // Prevent closure from being dropped
+
+        Ok(receiver.boxed())
     }
 
     async fn create_update_stream<'a>(client: &'a ClickPlanetRestClient) -> Result<BoxStream<'a, clicks::UpdateNotification>, Box<dyn std::error::Error + Send + Sync + 'a>> {
-        // Rest of the implementation remains the same
         let config = WebSocketConfig::default();
         let retry_strategy = ExponentialBackoff::from_millis(config.initial_interval.as_millis() as u64)
             .max_delay(config.max_interval)
