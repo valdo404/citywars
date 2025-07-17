@@ -6,6 +6,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tokio::time::sleep;
 use clickplanet_proto::clicks::{UpdateNotification};
 use clickplanet_client::TileCount;
+use clickplanet_client::ClickPlanetClient;
 
 #[derive(Clone)]
 pub struct TileSyncer {
