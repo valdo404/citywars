@@ -10,9 +10,9 @@ tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 async-nats = "0.32.1"
-rand = "0.8.5"
+rand = "0.9.1"
 prost = { workspace = true }
-bytes = "1.9.0"
+bytes = "1.11.1"
 uuid = { version = "1.11.0", features = ["v4"] }
 thiserror = { workspace = true }
 futures = "0.3.31"
@@ -21,7 +21,7 @@ deadpool-redis = { version = "0.13", features = ["rt_tokio_1"] }
 opentelemetry = { version = "0.27.1", features = ["trace"] }
 opentelemetry-otlp = { version = "0.27.0", features = ["trace", "grpc-tonic", "http-proto", "http-json", "tonic"] }
 tracing-opentelemetry = "0.28.0"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 opentelemetry_sdk = { version = "0.27.1", features = ["async-std", "rt-tokio"] }
 tokio-stream = "0.1.17"
 base64.workspace = true
