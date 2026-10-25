@@ -246,7 +246,7 @@ impl ClickRepository for RedisClickRepository {
             }
         }
 
-        pipe.query_async(&mut redis_conn)
+        let _: () = pipe.query_async(&mut redis_conn)
             .await
             .map_err(RedisError::from)?;
 
