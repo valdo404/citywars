@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1.7
+# click-server for Cloud Run: single process, no NATS (feature `nonats`), updates over SSE and the
+# websocket, optional Redis (Memorystore) through REDIS_URL. Cloud Run sets PORT.
+FROM rust:1.83-bookworm AS builder
+
+WORKDIR /usr/src/app
+
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+# the whole workspace is needed for cargo to load it, but only click-server is built
+COPY Cargo.toml Cargo.lock ./
+COPY clickplanet-client/ ./clickplanet-client/
+COPY clickplanet-robot/ ./clickplanet-robot/
+COPY clickplanet-server/ ./clickplanet-server/
+COPY clickplanet-proto/ ./clickplanet-proto/
+COPY clickplanet-webapp/ ./clickplanet-webapp/
+COPY clickplanet-globe/ ./clickplanet-globe/
+COPY clickplanet-globe-protocol/ ./clickplanet-globe-protocol/
+COPY clickplanet-osm/ ./clickplanet-osm/
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/src/app/target \
+    cargo build --release -p clickplanet-server --bin click-server --no-default-features --features nonats \
+    && cp target/release/click-server /usr/local/bin/click-server
+
+# glibc, libgcc and CA certificates, no shell, non-root
+FROM gcr.io/distroless/cc-debian12:nonroot
+
+COPY --from=builder /usr/local/bin/click-server /app/click-server
+
+ENV RUST_LOG=info
+EXPOSE 8080
+ENTRYPOINT ["/app/click-server"]
