@@ -91,6 +91,71 @@ It needs:
 - 1-N worker for redis storage
 - 1-N servers
 
+### Server modes: with or without NATS
+
+Cargo features must be additive (a feature cannot remove a dependency), so NATS is the optional
+part:
+
+| Build | Mode |
+|---|---|
+| `cargo build -p clickplanet-server` (default feature `nats`) | NATS JetStream carries the clicks; `state-click-persister` writes them to Redis. Several servers can share one NATS. |
+| `cargo build -p clickplanet-server --no-default-features --features nonats` | Single process, no NATS: clicks go through an in-memory `tokio::sync::broadcast`; Redis is optional (`REDIS_URL`) and gets every click directly. `state-click-persister` is not built. |
+
+`nonats` only selects the single-process mode; `--no-default-features` alone gives the same build.
+Enabling `nonats` together with `nats` (for example `--features nonats` without
+`--no-default-features`) stops the build with a `compile_error!` that says so.
+
+In both modes:
+- clicks are `POST /v2/rpc/click` (and `/api/click`), as before;
+- live updates are streamed with **Server-Sent Events** on `GET /v2/events` (`text/event-stream`):
+  `event: update` carries an `UpdateNotification`, `event: click` a `Click`, both base64 protobuf in
+  `data:`, with a monotonic `id:`. A client that reconnects with `Last-Event-ID` (`EventSource` does it by
+  itself; `?lastEventId=` also works) gets what it missed from a ring buffer of `SSE_BUFFER` events
+  (default 50,000). Slow clients that fall behind the broadcast channel are caught up the same way.
+  When the missed events are gone, the server sends `event: resync` and the web app reloads the
+  ownerships. A `:` comment is sent every `SSE_HEARTBEAT_SECS` (default 20 s) for proxies and Cloud Run;
+- the `/v2/ws/listen` websocket is kept: the robots (`clickplanet-client`) use it, and the web app can
+  use it with `?updates=ws` (for servers without SSE, such as clickplanet.lol). The web app uses SSE by
+  default.
+
+### Cloud Run
+
+`Dockerfile.cloudrun` builds `click-server` without NATS on a distroless image (non-root). Cloud Run
+constraints:
+
+- **Port**: the server listens on `$PORT` (set by Cloud Run).
+- **No local state survives**: without `REDIS_URL` the map lives in memory and is lost on every restart or
+  scale to zero. Use Memorystore (`REDIS_URL=redis://<ip>:6379`, reached through Direct VPC egress or a
+  VPC connector) to keep it.
+- **Long requests**: SSE and websockets are supported, but a request lasts at most the service timeout
+  (up to 60 minutes). `EventSource` reconnects by itself and resumes with `Last-Event-ID`; the web app's
+  websocket client reconnects too.
+- **One instance**: SSE solves the fan-out to clients, not the sharing of events between instances. Each
+  instance only sees its own clicks, so the service must run with `--max-instances=1`
+  (`--min-instances=1` avoids losing the in-memory state between requests when there is no Redis, and
+  `--no-cpu-throttling` keeps the background click processing running).
+
+```bash
+# not run by CI; nothing is deployed from this repository
+gcloud run deploy citywars-click-server \
+  --image europe-west1-docker.pkg.dev/PROJECT/REPOSITORY/click-server-cloudrun:TAG \
+  --region europe-west1 --allow-unauthenticated \
+  --max-instances 1 --min-instances 1 --no-cpu-throttling \
+  --timeout 3600 --concurrency 1000 \
+  --network default --subnet default --vpc-egress private-ranges-only \
+  --set-env-vars REDIS_URL=redis://10.0.0.3:6379
+```
+
+**Several instances (proposal, not implemented).** The simplest shared bus that fits this setup is a
+**Redis Stream** on the Memorystore instance already used for persistence: every instance `XADD`s the
+clicks it receives and runs one `XREAD` loop that feeds its in-memory map and its SSE hub. The stream
+entry ids are global and ordered, so they can become the SSE `id:` and `Last-Event-ID` keeps working
+when a client reconnects to another instance; `XTRIM` bounds the history. It would sit behind a
+`redis-bus` feature next to `nats`. Cost: one more Redis round trip per click, Memorystore sized for the
+click rate, and about two days of work (bus abstraction over NATS and Redis, tests with two
+instances). Plain Redis pub/sub would be simpler but has no replay, so a reconnecting client could not
+resume on another instance.
+
 
 ## Building
 
@@ -166,7 +231,8 @@ cd clickplanet-webapp && CITYWARS_STATIC_SITE=/static ./build-web.sh --release
 #   http://localhost:8080/?backend=fake&stats
 ```
 
-Query parameters: `backend=http|fake`, `api=<server URL>` (default `CITYWARS_API_URL` at build time, else
+Query parameters: `backend=http|fake`, `updates=sse|ws` (live updates over SSE, the default, or the websocket),
+`api=<server URL>` (default `CITYWARS_API_URL` at build time, else
 `http://localhost:3000`), `renderer=auto|webgpu|webgl`, `globe=main`, `stats` (HUD with renderer and fps; the same
 values are on `window.citywarsStats`).
 
