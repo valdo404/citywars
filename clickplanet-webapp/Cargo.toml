@@ -28,6 +28,8 @@ bytemuck = { version = "1.14", features = ["derive"] }
 lazy_static = "1.4.0"
 async-trait = "0.1.83"
 futures-util = "0.3.31"
+# Used by both the web globe and the native compute-points script.
+glam = "0.30.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 reqwest = { version = "0.12.9", features = ["json"] }
@@ -56,7 +58,6 @@ gloo-console = "0.3.0"
 gloo-render = "0.2.0"
 wgpu = { version = "25.0.0", features = ["webgl", "webgpu", "wgsl"], default-features = false }
 getrandom = { version = "0.2.10", features = ["js"] }
-glam = "0.30.1"
 console_log = "1.0.0"
 dioxus = { version = "0.6.2", features = ["web", "router"] }
 dioxus-web = { version = "0.6.2" }

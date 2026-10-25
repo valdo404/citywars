@@ -94,11 +94,25 @@ It needs:
 
 ## Building
 
-Requires Rust and Cargo. To build:
+Requires Rust (stable) and `protoc` (Protocol Buffers compiler). To build and test the native crates:
 
 ```bash
-cargo build
+cargo build --workspace
+cargo test --workspace      # the Redis tests start a container, so Docker must be running
 ```
+
+`clickplanet-webapp` only runs in the browser (`wasm32-unknown-unknown`); on native its binary is a stub, so
+`cargo check --workspace` works everywhere. The web bundle is built with the Dioxus CLI **0.6.3**:
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install dioxus-cli --version 0.6.3 --locked
+cd clickplanet-webapp && ./build-web.sh --release   # output in clickplanet-webapp/dist
+```
+
+The Dioxus CLI binary is called `dx`, like Deno's tool (e.g. Homebrew's `deno` ships a `dx`). `build-web.sh` does not
+trust the first `dx` on `PATH`: it uses `$DX`, then `dx` on `PATH`, then `~/.cargo/bin/dx`, and keeps the first one
+that reports `dioxus 0.6.3`. Set `DX=/path/to/dx` to force one.
 
 ## API Endpoints
 
@@ -128,14 +142,20 @@ cargo build
 
 ## Known issues
 
-- `wasm-bindgen` 0.2.99 (pinned in `Cargo.lock`) fails with "duplicate export name" on recent rustc toolchains.
-- The webapp needs the Dioxus CLI (`dx`, dioxus-cli 0.6). On some machines (e.g. Homebrew) `dx` is Deno's tool,
-  not Dioxus', and `asset!()` only works with the real one.
-- The static site bucket used for `CITYWARS_STATIC_SITE` in CI currently answers 403.
+- The static site bucket used for `CITYWARS_STATIC_SITE` (`storage.googleapis.com/lv-project-313715-clickwars-static`)
+  currently answers 403. This is a bucket permission issue, not a code issue. The build only embeds the URL as a
+  compile-time string, so CI does not depend on it, but the web app cannot load its static assets (textures,
+  `coordinates.json`, flags) until the bucket is readable again or `CITYWARS_STATIC_SITE` points to another host
+  (for example a local server of `clickplanet-static/static`).
 - `clickplanet-webapp/src/scripts/compute_points.rs` is wrong: it ignores the `detail` parameter and only emits the
-  12 base icosahedron points, so it cannot regenerate `coordinates.json`. It also does not compile
-  (unresolved `glam` import).
-- `cargo check --workspace` fails on the native target: besides `compute-points`, `clickplanet-webapp` only builds for
-  `wasm32-unknown-unknown` (its wasm-only dependencies are missing on native), and the `clickplanet-server` binaries
-  hit the "never type fallback" lint that recent rustc denies by default. CI builds the native crates with
-  `--exclude clickplanet-webapp`.
+  12 base icosahedron points, so it cannot regenerate `coordinates.json`. A fix has to reproduce three.js'
+  `IcosahedronGeometry` vertex order exactly (tile ids are vertex indices), so it is left as is; it now compiles.
+
+Fixed:
+
+- `wasm-bindgen` 0.2.99 failed with "duplicate export name" on recent rustc; it is now 0.2.129 (with `js-sys` /
+  `web-sys` 0.3.106 and `wasm-bindgen-futures` 0.4.79). Dioxus 0.6.3 is unchanged.
+- `compute_points.rs` did not compile on native (`glam` was a wasm-only dependency).
+- `cargo check --workspace` failed on native: `clickplanet-webapp` is now a stub outside wasm32, and the
+  `clickplanet-server` binaries no longer rely on the never type fallback (denied by recent rustc).
+- The Dioxus CLI / Deno `dx` name clash: see Building.

@@ -4,19 +4,27 @@ on:
   push:
     branches:
       - main
-      - feat-*
   pull_request:
-    branches:
-      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Only used as a compile-time base URL by the web app; CI never downloads from it.
+  CITYWARS_STATIC_SITE: "https://storage.googleapis.com/lv-project-313715-clickwars-static/static"
+  DIOXUS_CLI_VERSION: "0.6.3"
 
 jobs:
   native:
     name: Build and Test Native
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Protobuf Compiler (protoc)
         run: |
@@ -25,52 +33,32 @@ jobs:
           protoc --version
 
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          components: rustfmt, clippy
-          override: true
+          components: clippy
 
       - name: Cache Rust dependencies
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-native-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-native-
+          shared-key: native
 
-      - name: Install dependencies
-        run: |
-          cargo fetch
+      - name: Build
+        run: cargo build --workspace --all-targets
 
-      - name: Build native project
-        run: |
-          cargo build --verbose --workspace --exclude clickplanet-webapp
+      # The Redis tests start a container through testcontainers (Docker is available on the runner).
+      - name: Test
+        run: cargo test --workspace
 
-      - name: Run native tests
-        run: |
-          cargo test --verbose --workspace --exclude clickplanet-webapp
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets
 
   webassembly:
     name: Build WebAssembly
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Setup Rust
-        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af
-        with:
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          components: rustfmt, clippy
-          override: true
+        uses: actions/checkout@v4
 
       - name: Install Protobuf Compiler (protoc)
         run: |
@@ -78,38 +66,36 @@ jobs:
           sudo apt-get install -y protobuf-compiler
           protoc --version
 
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-wasm-
+          targets: wasm32-unknown-unknown
+          components: clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm
 
       - name: Install Dioxus CLI
         uses: taiki-e/cache-cargo-install-action@v2
         with:
-          tool: dioxus-cli
+          tool: dioxus-cli@${{ env.DIOXUS_CLI_VERSION }}
+          locked: true
 
-      - name: Build WebAssembly with Dioxus
-        env:
-          CITYWARS_STATIC_SITE: "https://storage.googleapis.com/lv-project-313715-clickwars-static/static"
-          RUSTFLAGS: "--cfg=web_sys_unstable_apis"
-        run: |
-          cd clickplanet-webapp
-          dx build --release
-          mkdir -p dist
-          cp -r ../target/dx/clickplanet-webapp/release/web/public/* dist/
+      # clickplanet-webapp/.cargo/config.toml selects the wasm32 target and the web_sys_unstable_apis cfg.
+      - name: Clippy (wasm32)
+        working-directory: clickplanet-webapp
+        run: cargo clippy
 
-      - name: Package WASM
-        run: |
-          cd clickplanet-webapp/dist
-          tar czf ../../clickplanet-webapp.tar.gz .
+      - name: Build web bundle with Dioxus
+        working-directory: clickplanet-webapp
+        run: ./build-web.sh --release
 
-      - name: Upload WASM Package
+      - name: Package web bundle
+        run: tar czf clickplanet-webapp.tar.gz -C clickplanet-webapp/dist .
+
+      - name: Upload web bundle
         uses: actions/upload-artifact@v4
         with:
           name: clickplanet-webapp
@@ -117,29 +103,24 @@ jobs:
 
   docker:
     name: Build Docker Images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Build Docker Images
-        run: |
-          docker compose -f docker-compose.yml build
+        run: docker compose -f docker-compose.yml build
 
+      # Publishing only happens from main; pull requests just check that the images build.
       - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.PAT }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-
-      - name: Build and push Docker images
-        run: |
-          docker compose -f docker-compose.yml push
+      - name: Push Docker images
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker compose -f docker-compose.yml push
