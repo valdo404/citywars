@@ -5,7 +5,9 @@ members = [
     "clickplanet-webapp",
     "clickplanet-proto",
     "clickplanet-robot",
-    "clickplanet-osm"
+    "clickplanet-osm",
+    "clickplanet-globe-protocol",
+    "clickplanet-globe"
 ]
 resolver = "1"
 
