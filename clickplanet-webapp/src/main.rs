@@ -1,16 +1,31 @@
+// The web app only targets wasm32 (build it with the Dioxus CLI). On native the
+// binary is a stub so that `cargo check --workspace` works.
+#[cfg(target_arch = "wasm32")]
 use dioxus::prelude::*;
+#[cfg(target_arch = "wasm32")]
 use dioxus::document::Stylesheet;
+#[cfg(target_arch = "wasm32")]
 use crate::app::countries::{Country, CountryRepository};
 
+#[cfg(target_arch = "wasm32")]
 mod app;
+#[cfg(target_arch = "wasm32")]
 mod backends;
 
+#[cfg(not(target_arch = "wasm32"))]
+fn main() {
+    eprintln!("clickplanet-webapp only runs in the browser: build it with `dx build` (target wasm32-unknown-unknown)");
+    std::process::exit(1);
+}
+
+#[cfg(target_arch = "wasm32")]
 fn main() {
     console_log::init_with_level(log::Level::Info).expect("Unable to initialize console_log");
     
     launch(App);
 }
 
+#[cfg(target_arch = "wasm32")]
 #[derive(Routable, Clone, PartialEq)]
 enum Route {
     #[route("/")]
@@ -20,6 +35,7 @@ enum Route {
     NotFound { segments: Vec<String> },
 }
 
+#[cfg(target_arch = "wasm32")]
 #[allow(non_snake_case)]
 fn App() -> Element {
     let import_map = r#"{
@@ -53,6 +69,7 @@ fn App() -> Element {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 #[component]
 fn Home() -> Element {
     let mut show_welcome_modal = use_signal(|| true);
@@ -109,6 +126,7 @@ fn Home() -> Element {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 #[component]
 fn About() -> Element {
     rsx! {
@@ -127,6 +145,7 @@ fn About() -> Element {
 }
 
 
+#[cfg(target_arch = "wasm32")]
 #[component]
 fn NotFound(segments: Vec<String>) -> Element {
     let url_path = if segments.is_empty() { 
