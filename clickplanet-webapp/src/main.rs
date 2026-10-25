@@ -1,11 +1,6 @@
-// The web app only targets wasm32 (build it with the Dioxus CLI). On native the
-// binary is a stub so that `cargo check --workspace` works.
-#[cfg(target_arch = "wasm32")]
-use dioxus::prelude::*;
-#[cfg(target_arch = "wasm32")]
-use dioxus::document::Stylesheet;
-#[cfg(target_arch = "wasm32")]
-use crate::app::countries::{Country, CountryRepository};
+// The web app only targets wasm32 (build it with build-web.sh). On native the binary is a stub so
+// that `cargo check --workspace` works; the platform-independent logic in `core` is tested there.
+mod core;
 
 #[cfg(target_arch = "wasm32")]
 mod app;
@@ -14,155 +9,84 @@ mod backends;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    eprintln!("clickplanet-webapp only runs in the browser: build it with `dx build` (target wasm32-unknown-unknown)");
+    eprintln!("clickplanet-webapp only runs in the browser: build it with `./build-web.sh` (target wasm32-unknown-unknown)");
     std::process::exit(1);
 }
 
 #[cfg(target_arch = "wasm32")]
 fn main() {
     console_log::init_with_level(log::Level::Info).expect("Unable to initialize console_log");
-    
-    launch(App);
+    dioxus::launch(web::App);
 }
 
 #[cfg(target_arch = "wasm32")]
-#[derive(Routable, Clone, PartialEq)]
-enum Route {
-    #[route("/")]
-    Home {},
-    
-    #[route("/:..segments")]
-    NotFound { segments: Vec<String> },
-}
+mod web {
+    use std::rc::Rc;
 
-#[cfg(target_arch = "wasm32")]
-#[allow(non_snake_case)]
-fn App() -> Element {
-    let import_map = r#"{
-        "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-        }
-      }"#.to_string();
+    use dioxus::document::Stylesheet;
+    use dioxus::prelude::*;
 
-    rsx! {
-        document::Link { rel: "icon", href: asset!("public/static/favicon.png") }
-        Stylesheet { href: asset!("public/styles/base.css") }
-        Stylesheet { href: asset!("public/styles/DiscordButton.css") }
-        Stylesheet { href: asset!("public/styles/BuyMeACoffee.css") }
-        Stylesheet { href: asset!("public/styles/Modal.css") }
-        Stylesheet { href: asset!("public/styles/CloseButton.css") }
-        Stylesheet { href: asset!("public/styles/SelectWithSearch.css") }
-        Stylesheet { href: asset!("public/styles/About.css") }
-        Stylesheet { href: asset!("public/styles/Leaderboard.css") }
-        Stylesheet { href: asset!("public/styles/Menu.css") }
+    use crate::app;
+    use crate::app::game::CountryList;
 
-        script { 
-            r#type: "importmap",
-            {import_map}    
-        }
+    #[derive(Routable, Clone, PartialEq)]
+    enum Route {
+        #[route("/")]
+        Home {},
 
-        Stylesheet { href: asset!("public/styles/rust-specific.css") }
-        div { class: "content",
-            Router::<Route> {}
+        #[route("/:..segments")]
+        NotFound { segments: Vec<String> },
+    }
+
+    #[allow(non_snake_case)]
+    pub fn App() -> Element {
+        rsx! {
+            document::Link { rel: "icon", href: asset!("public/static/favicon.png") }
+            Stylesheet { href: asset!("public/styles/base.css") }
+            Stylesheet { href: asset!("public/styles/DiscordButton.css") }
+            Stylesheet { href: asset!("public/styles/BuyMeACoffee.css") }
+            Stylesheet { href: asset!("public/styles/Modal.css") }
+            Stylesheet { href: asset!("public/styles/CloseButton.css") }
+            Stylesheet { href: asset!("public/styles/SelectWithSearch.css") }
+            Stylesheet { href: asset!("public/styles/About.css") }
+            Stylesheet { href: asset!("public/styles/Leaderboard.css") }
+            Stylesheet { href: asset!("public/styles/Menu.css") }
+            Stylesheet { href: asset!("public/styles/rust-specific.css") }
+            div { class: "content",
+                Router::<Route> {}
+            }
         }
     }
-}
 
-#[cfg(target_arch = "wasm32")]
-#[component]
-fn Home() -> Element {
-    let mut show_welcome_modal = use_signal(|| true);
-    
-    let mut country = use_signal(|| CountryRepository::load_selected());
-    
-    let set_country = move |new_country: Country| {
-        country.set(new_country);
-    };
-    
-    rsx! {
-        div { class: "container",            
-            if show_welcome_modal() {
-                app::components::on_load_modal::OnLoadModal {
-                    title: "Dear earthlings".to_string(),
-                    on_close: move |_| show_welcome_modal.set(false),
-                    children: rsx! {
-                        div { class: "center-align",
-                            img {
-                                alt: "ClickPlanet logo",
-                                src: format!("{}/favicon.png", env!("CITYWARS_STATIC_SITE")),
-                                width: "64px",
-                                height: "auto"
-                            }
-                        }
-                        div { class: "modal-onload-text",
-                            h3 { "Do you like ClickPlanet ?" }
-                            p { "It's free and open-source 🤗" }
-                            p { "Sadly, the servers are expensive to run 😭" }
-                            p { "Every contribution helps us keep this awesome platform running!" }
-                        }
-                        app::components::buy_me_a_coffee::BuyMeACoffee {}
-                    }
+    #[component]
+    fn Home() -> Element {
+        let countries = use_resource(app::countries::load_all);
+        let countries = countries.read().clone();
+        match countries {
+            None => rsx! { div { class: "loading", "Loading…" } },
+            Some(Err(e)) => rsx! { div { class: "globe-error", "Cannot load the game data: {e}" } },
+            Some(Ok(list)) => rsx! {
+                app::game::Game { countries: CountryList(Rc::new(list)) }
+            },
+        }
+    }
+
+    #[component]
+    fn NotFound(segments: Vec<String>) -> Element {
+        let url_path = if segments.is_empty() {
+            "/".to_string()
+        } else {
+            format!("/{}", segments.join("/"))
+        };
+
+        rsx! {
+            div { class: "not-found",
+                h1 { "Page Not Found" }
+                p { "The page you're looking for doesn't exist." }
+                p { "Requested URL: {url_path}" }
+                Link { to: Route::Home {},
+                    button { "Return Home" }
                 }
-            }
-            
-            
-            app::components::earth::globe::Globe {}
-                        
-            div { class: "menu",
-                app::components::leaderboard::Leaderboard {}
-                div { class: "menu-actions",
-                    app::components::settings::Settings {
-                        country: country(),
-                        set_country: Callback::new(set_country),
-                    }
-                    app::components::about::About {}
-                    app::components::discord_button::DiscordButton {
-                        message: Some("Join us on Discord".to_string()),
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-#[component]
-fn About() -> Element {
-    rsx! {
-        div { class: "about-page",
-            h1 { "About ClickPlanet" }
-            p { "ClickPlanet is a real-time collaborative globe where players from around the world can claim hexagonal territories for their countries." }
-            p { "This is a Rust/WebAssembly implementation of the original ClickPlanet game." }
-            button { 
-                onclick: move |_| { router().push(Route::Home {}); }, 
-                "Return to the globe" 
-            }
-
-
-        }
-    }
-}
-
-
-#[cfg(target_arch = "wasm32")]
-#[component]
-fn NotFound(segments: Vec<String>) -> Element {
-    let url_path = if segments.is_empty() { 
-        "/".to_string() 
-    } else { 
-        format!("/{}", segments.join("/")) 
-    };
-    
-    rsx! {
-        div { class: "not-found", 
-            h1 { "Page Not Found" }
-            p { "The page you're looking for doesn't exist." }
-            p { 
-                "Requested URL: {url_path}"
-            }
-            Link { to: Route::Home {}, 
-                button { "Return Home" }
             }
         }
     }

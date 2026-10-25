@@ -42,16 +42,26 @@ pub fn About() -> Element {
                     h4 { "How to Play" }
                     ol {
                         li { "Select your country from the settings menu" }
-                        li { "Click on any unclaimed hexagon to claim it for your country" }
+                        li { "Click on any tile to claim it for your country" }
                         li { "Each claim gives your country points" }
                         li { "Check the leaderboard to see how your country ranks" }
                     }
                 }
                 
+                div { class: "modal-about-author",
+                    p { class: "center-align", "Original game created by" }
+                    h3 { "Raphaël Oester" }
+                    div { class: "modal-about-social",
+                        a { target: "_blank", href: "https://www.linkedin.com/in/raphael-oester/", b { "in" } }
+                        a { target: "_blank", href: "https://x.com/raphael_oester", b { "X" } }
+                        a { target: "_blank", href: "https://github.com/raphoester", b { "GitHub" } }
+                    }
+                }
+
                 div { class: "about-links",
                     p { class: "center-align", "Want to contribute or learn more?" }
                     div { class: "center-align modal-about-social",
-                        a { target: "_blank", href: "https://github.com/valdo404/clickplanet-client", b { "GitHub" } }
+                        a { target: "_blank", href: "https://github.com/valdo404/citywars", b { "GitHub" } }
                     }
                 }
                 

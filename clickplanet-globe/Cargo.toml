@@ -1,0 +1,32 @@
+[package]
+name = "clickplanet-globe"
+version = "0.1.0"
+edition = "2021"
+description = "Globe renderer (wgpu: WebGPU with WebGL2 fallback) for the citywars web app, as a separate wasm bundle"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+clickplanet-globe-protocol = { path = "../clickplanet-globe-protocol" }
+glam = "0.30.1"
+rstar.workspace = true
+bytemuck = { version = "1.14", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+log = "0.4.22"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2.129"
+wasm-bindgen-futures = "0.4.79"
+js-sys = "0.3.106"
+web-sys = { version = "0.3.106", features = [
+    "Window", "WorkerGlobalScope", "DedicatedWorkerGlobalScope", "WorkerNavigator", "Navigator",
+    "HtmlCanvasElement", "OffscreenCanvas", "MessageEvent", "MessagePort",
+    "Request", "Response", "Blob", "ImageBitmap", "ImageBitmapOptions", "ResizeQuality",
+    "PremultiplyAlpha", "ColorSpaceConversion", "Performance", "console" ] }
+wgpu = { version = "25.0.0", features = ["webgl", "webgpu", "wgsl"], default-features = false }
+futures = "0.3.31"
+console_log = "1.0.0"
+console_error_panic_hook = "0.1.7"

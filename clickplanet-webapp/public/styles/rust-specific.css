@@ -12,3 +12,48 @@
 }
 
 /* Any WebAssembly/Dioxus specific adjustments */
+
+/* Globe canvas: the globe bundle renders into it (from a worker when possible). */
+.globe-container {
+    position: fixed;
+    inset: 0;
+    background-color: black;
+}
+
+.globe-canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    background-color: black;
+    /* the globe handles drag, pinch and wheel itself */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.stats-hud {
+    position: fixed;
+    right: 8px;
+    bottom: 8px;
+    z-index: 200;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: #000000a0;
+    color: #fff;
+    font: 12px monospace;
+    pointer-events: none;
+}
+
+.globe-error,
+.loading {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 200;
+    padding: 8px 16px;
+    border-radius: 12px;
+    background: #000000c0;
+    color: #fff;
+}

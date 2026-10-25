@@ -16,6 +16,8 @@ env:
   # Only used as a compile-time base URL by the web app; CI never downloads from it.
   CITYWARS_STATIC_SITE: "https://storage.googleapis.com/lv-project-313715-clickwars-static/static"
   DIOXUS_CLI_VERSION: "0.6.3"
+  # Must match the wasm-bindgen crate version in Cargo.lock (used for the globe bundle).
+  WASM_BINDGEN_VERSION: "0.2.129"
 
 jobs:
   native:
@@ -83,12 +85,20 @@ jobs:
           tool: dioxus-cli@${{ env.DIOXUS_CLI_VERSION }}
           locked: true
 
+      - name: Install wasm-bindgen CLI
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: wasm-bindgen-cli@${{ env.WASM_BINDGEN_VERSION }}
+          locked: true
+
       # clickplanet-webapp/.cargo/config.toml selects the wasm32 target and the web_sys_unstable_apis cfg.
       - name: Clippy (wasm32)
         working-directory: clickplanet-webapp
-        run: cargo clippy
+        run: |
+          cargo clippy
+          cargo clippy -p clickplanet-globe --target wasm32-unknown-unknown
 
-      - name: Build web bundle with Dioxus
+      - name: Build web bundles (Dioxus interface + globe)
         working-directory: clickplanet-webapp
         run: ./build-web.sh --release
 

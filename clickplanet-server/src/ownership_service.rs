@@ -194,26 +194,24 @@ impl OwnershipUpdateService {
     async fn process_click(&self, click: Click) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let previous_ownership: Option<Ownership> = self.click_repository.save_click(click.tile_id as u32, &click).await?;
 
-        // Only process ownership change if:
-        // 1. There was a previous owner (Some) AND
-        // 2. The previous country_id is different from the current one
-        if let Some(last_ownership) = previous_ownership {
-            if last_ownership.country_id != click.country_id {
-                let notification = UpdateNotification {
-                    tile_id: click.tile_id.try_into().unwrap(),
-                    previous_country_id: last_ownership.country_id,
-                    country_id: click.country_id,
-                };
+        // Notify when the owner changes, including the first claim of an unowned tile (empty
+        // previous country), so that live clients see every new ownership.
+        let previous_country_id = previous_ownership.map(|o| o.country_id).unwrap_or_default();
+        if previous_country_id != click.country_id {
+            let notification = UpdateNotification {
+                tile_id: click.tile_id,
+                previous_country_id,
+                country_id: click.country_id,
+            };
 
-                self.leaderboard_maintainer.update_country_index(click.tile_id as u32,
-                                                                 notification.country_id.as_str(),
-                                                                 Some(notification.previous_country_id.as_str())
-                                                                     .filter(|string| !string.is_empty())).await;
+            self.leaderboard_maintainer.update_country_index(click.tile_id as u32,
+                                                             notification.country_id.as_str(),
+                                                             Some(notification.previous_country_id.as_str())
+                                                                 .filter(|string| !string.is_empty())).await;
 
-                let result = self.update_tx.send(notification);
-                if let Err(e) = result {
-                    tracing::debug!("No listener for ownership update: {:?}", e);
-                }
+            let result = self.update_tx.send(notification);
+            if let Err(e) = result {
+                tracing::debug!("No listener for ownership update: {:?}", e);
             }
         }
 

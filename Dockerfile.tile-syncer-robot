@@ -14,6 +14,8 @@ COPY clickplanet-robot/ ./clickplanet-robot/
 COPY clickplanet-server/ ./clickplanet-server/
 COPY clickplanet-proto/ ./clickplanet-proto/
 COPY clickplanet-webapp/ ./clickplanet-webapp/
+COPY clickplanet-globe/ ./clickplanet-globe/
+COPY clickplanet-globe-protocol/ ./clickplanet-globe-protocol/
 COPY clickplanet-osm/ ./clickplanet-osm/
 
 RUN cargo build --release --bin tile-syncer
