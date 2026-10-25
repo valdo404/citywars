@@ -114,6 +114,62 @@ The Dioxus CLI binary is called `dx`, like Deno's tool (e.g. Homebrew's `deno` s
 trust the first `dx` on `PATH`: it uses `$DX`, then `dx` on `PATH`, then `~/.cargo/bin/dx`, and keeps the first one
 that reports `dioxus 0.6.3`. Set `DX=/path/to/dx` to force one.
 
+The globe bundle also needs the wasm-bindgen CLI matching `Cargo.lock`
+(`cargo install wasm-bindgen-cli --version 0.2.129 --locked`); `wasm-opt` is used when installed.
+
+## Web app
+
+The web app is a port of the [original Clickplanet front end](https://github.com/raphoester/clickplanet.lol-frontend)
+(React + three.js) to Rust, without three.js. It is made of **two WebAssembly bundles** that only talk through events:
+
+| Bundle | Crate | Role |
+|---|---|---|
+| Interface | `clickplanet-webapp` (Dioxus 0.6) | Menus, modals, leaderboard, country selection, HUD. Owns the network: RPC to the server, live updates, clicks. |
+| Globe | `clickplanet-globe` (wgpu 25) | Earth, ~258k tiles, camera controls, picking. Fetches its own static data (`coordinates.json`, flag atlas, earth texture). |
+| Contract | `clickplanet-globe-protocol` | Versioned, typed messages (`UiToGlobe`, `GlobeToUi`) encoded with postcard. |
+
+- **Messages.** Interface → globe: `Init`, `SetCountries`, `SetOwners` (batches and live updates), `PlayerCountry`,
+  `Settings`, `Camera`, `Pointer`, `Wheel`, `Resize`. Globe → interface: `TilesLoaded`, `Ready`, `Hovered`, `Clicked`
+  (tile id, lon/lat), `Stats` (fps), `Error`. Any globe that speaks this protocol (for example a future tuile-based one)
+  can replace `clickplanet-globe` without touching the interface.
+- **Transport.** By default the globe runs in a **Web Worker** drawing on an **OffscreenCanvas**
+  (`transferControlToOffscreen`), so rendering never blocks the Dioxus thread. Payloads are `ArrayBuffer`s passed as
+  transferables. If OffscreenCanvas is missing, or the worker or the GPU fails to start, the interface restarts the
+  globe on the **main thread**, connected through a `MessageChannel` with the same messages (`?globe=main` forces it).
+- **Rendering.** WebGPU when the browser has it, otherwise **WebGL2** through wgpu's GL backend (`?renderer=webgl`
+  forces it). Tiles are drawn as one instanced draw (one camera-facing disc per tile, flag from
+  `countries/atlas.png`); ownership changes are partial writes to the instance buffer.
+- **Picking.** Ray against the sphere on the CPU, then nearest tile in an R*-tree (`rstar`). It is synchronous, works
+  the same on both backends and is cheap enough for hover on every pointer move; a GPU id buffer would need an extra
+  pass and an asynchronous (WebGPU) or stalling (WebGL2) read-back.
+- **Controls.** Same behaviour as the original `OrbitControls` setup: drag to rotate with inertia, wheel or pinch to
+  zoom (×1 to ×50), auto-rotation while not zoomed in.
+
+Browser support (worker + OffscreenCanvas, else main thread; WebGPU, else WebGL2):
+
+| Browser | Globe in a worker | WebGPU | Notes |
+|---|---|---|---|
+| Chrome / Edge 113+ (desktop, Android) | yes | yes | |
+| Firefox 105+ | yes (WebGL2) | 141+ on Windows | elsewhere WebGL2 |
+| Safari 17+ (macOS, iOS) | yes (WebGL2) | Safari 26+ | Safari 16.4: worker + WebGL2 may fall back to the main thread |
+| Older browsers | main thread | no | WebGL2 required |
+
+Only Chromium was checked end to end (see the parity PR); Safari and Firefox support comes from their documented
+APIs and the automatic fallbacks.
+
+Run it locally:
+
+```bash
+# offline, with the fake backend (robots clicking for every country)
+cd clickplanet-webapp && CITYWARS_STATIC_SITE=/static ./build-web.sh --release
+# serve clickplanet-webapp/dist at / and clickplanet-static/static (+ coordinates.json) at /static, then open
+#   http://localhost:8080/?backend=fake&stats
+```
+
+Query parameters: `backend=http|fake`, `api=<server URL>` (default `CITYWARS_API_URL` at build time, else
+`http://localhost:3000`), `renderer=auto|webgpu|webgl`, `globe=main`, `stats` (HUD with renderer and fps; the same
+values are on `window.citywarsStats`).
+
 ## API Endpoints
 
 - WebSocket: wss://clickplanet.lol/ws/listen
