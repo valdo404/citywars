@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Build stage
 FROM rust:1.83-bookworm AS builder
 
@@ -31,8 +32,11 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /usr/src/app/target/release/country-watchguard ./
 LABEL org.opencontainers.image.source https://github.com/valdo404/clickplanet-rust
 
-COPY countries.geojson \
-     tile_to_countries.json \
+# countries.geojson is no longer versioned: fetch the pinned copy (see scripts/fetch-countries-geojson.sh)
+ADD --chmod=644 --checksum=sha256:764f259082c141debd112178117f2a76fe40c585415b1edd1466a43d20d15fea \
+    https://raw.githubusercontent.com/datasets/geo-countries/cbd21e172776299d78a395cca2243917d505a608/data/countries.geojson \
+    ./countries.geojson
+COPY tile_to_countries.json \
      coordinates.json \
      country_to_tiles.json \
      ./

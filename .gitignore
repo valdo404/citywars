@@ -61,3 +61,5 @@ __pycache__/
 metals.sbt
 # ignore npm lock file
 package-lock.json
+# Downloaded data (see scripts/fetch-countries-geojson.sh)
+/countries.geojson
