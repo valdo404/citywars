@@ -263,8 +263,62 @@ pub fn Game(countries: CountryList) -> Element {
         }
     };
 
+    // loads every ownership by batches and relays them to the globe (start-up and SSE resync)
+    let load_ownerships = {
+        let backend = backend.clone();
+        let state = state.clone();
+        let client = client.clone();
+        let commit = commit_leaderboard.clone();
+        move |n: u32| {
+            let backend = backend.clone();
+            let state = state.clone();
+            let client = client.clone();
+            let commit = commit.clone();
+            spawn(async move {
+                let started_at = js_sys::Date::now();
+                let mut on_batch = |batch: Vec<(u32, String)>| {
+                    let mut s = state.borrow_mut();
+                    let mut grew = false;
+                    let mut tiles = Vec::with_capacity(batch.len());
+                    let mut owners = Vec::with_capacity(batch.len());
+                    for (tile, code) in batch {
+                        let (index, inserted) = s.countries.index_or_insert(&code);
+                        grew |= inserted;
+                        s.set_owner(tile, index);
+                        tiles.push(tile);
+                        owners.push(index);
+                    }
+                    if grew {
+                        client.send(&UiToGlobe::SetCountries { codes: s.countries.codes.clone() });
+                    }
+                    client.send(&UiToGlobe::SetOwners { tiles, owners });
+                };
+                let result = backend
+                    .get_current_ownerships_by_batch(OWNERSHIP_BATCH_SIZE, n, &mut on_batch)
+                    .await;
+                if let Err(e) = result {
+                    log::error!("Failed to fetch initial ownerships: {e}");
+                    return;
+                }
+                // exact counts once every tile is known
+                {
+                    let mut s = state.borrow_mut();
+                    let counts = s.counts();
+                    s.model.set_snapshot(counts);
+                }
+                commit();
+                performance_mark("citywars-ownerships-loaded");
+                let (bytes, relay_ms) = client.transfer_stats();
+                publish_stat("ownershipsLoadMs", (js_sys::Date::now() - started_at).into());
+                publish_stat("relayBytes", (bytes as f64).into());
+                publish_stat("relayEncodePostMs", relay_ms.into());
+            });
+        }
+    };
+
     // network: leaderboard snapshot and live updates, started once
     use_hook({
+        let load_ownerships = load_ownerships.clone();
         let backend = backend.clone();
         let state = state.clone();
         let commit = commit_leaderboard.clone();
@@ -298,15 +352,27 @@ pub fn Game(countries: CountryList) -> Element {
                     apply_updates(updates);
                 }
             });
+
+            // SSE resync: the missed updates are gone, reload every ownership
+            let (resync_tx, mut resync_rx) = unbounded::<()>();
+            backend.on_resync(Rc::new(move || {
+                let _ = resync_tx.unbounded_send(());
+            }));
+            let load_ownerships = load_ownerships.clone();
+            spawn(async move {
+                while resync_rx.next().await.is_some() {
+                    load_ownerships(tile_count.peek().to_owned() as u32);
+                }
+            });
         }
     });
 
     // globe events
     use_hook({
+        let load_ownerships = load_ownerships.clone();
         let client = client.clone();
         let backend = backend.clone();
         let state = state.clone();
-        let commit = commit_leaderboard.clone();
         move || {
             let mut rx = events.borrow_mut().take().expect("globe events are consumed once");
             spawn(async move {
@@ -320,49 +386,7 @@ pub fn Game(countries: CountryList) -> Element {
                             if started {
                                 continue;
                             }
-                            let backend = backend.clone();
-                            let state = state.clone();
-                            let client = client.clone();
-                            let commit = commit.clone();
-                            spawn(async move {
-                                let started_at = js_sys::Date::now();
-                                let mut on_batch = |batch: Vec<(u32, String)>| {
-                                    let mut s = state.borrow_mut();
-                                    let mut grew = false;
-                                    let mut tiles = Vec::with_capacity(batch.len());
-                                    let mut owners = Vec::with_capacity(batch.len());
-                                    for (tile, code) in batch {
-                                        let (index, inserted) = s.countries.index_or_insert(&code);
-                                        grew |= inserted;
-                                        s.set_owner(tile, index);
-                                        tiles.push(tile);
-                                        owners.push(index);
-                                    }
-                                    if grew {
-                                        client.send(&UiToGlobe::SetCountries { codes: s.countries.codes.clone() });
-                                    }
-                                    client.send(&UiToGlobe::SetOwners { tiles, owners });
-                                };
-                                let result = backend
-                                    .get_current_ownerships_by_batch(OWNERSHIP_BATCH_SIZE, n, &mut on_batch)
-                                    .await;
-                                if let Err(e) = result {
-                                    log::error!("Failed to fetch initial ownerships: {e}");
-                                    return;
-                                }
-                                // exact counts once every tile is known
-                                {
-                                    let mut s = state.borrow_mut();
-                                    let counts = s.counts();
-                                    s.model.set_snapshot(counts);
-                                }
-                                commit();
-                                performance_mark("citywars-ownerships-loaded");
-                                let (bytes, relay_ms) = client.transfer_stats();
-                                publish_stat("ownershipsLoadMs", (js_sys::Date::now() - started_at).into());
-                                publish_stat("relayBytes", (bytes as f64).into());
-                                publish_stat("relayEncodePostMs", relay_ms.into());
-                            });
+                            load_ownerships(n);
                         }
                         GlobeEvent::Message(GlobeToUi::Ready { renderer, tile_count: n }) => {
                             performance_mark("citywars-globe-ready");

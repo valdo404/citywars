@@ -6,6 +6,8 @@
 //!   citywars server.
 //! - `CITYWARS_BACKEND` (compile time, default `http`) or `?backend=http|fake`: `fake` runs the
 //!   offline backend with robot clicks, for development without a server.
+//! - `CITYWARS_UPDATES` (compile time, default `sse`) or `?updates=sse|ws`: live updates over
+//!   Server-Sent Events (`/v2/events`) or the websocket (`/v2/ws/listen`, for servers without SSE).
 //! - `?renderer=auto|webgpu|webgl`: graphics backend (default `auto`: WebGPU when available, else
 //!   WebGL2).
 //! - `?stats`: shows the frame rate and renderer in a small HUD.
@@ -29,6 +31,7 @@ pub enum RendererChoice {
 pub struct Config {
     pub api_url: String,
     pub backend: BackendKind,
+    pub websocket_updates: bool,
     pub renderer: RendererChoice,
     pub show_stats: bool,
 }
@@ -66,9 +69,16 @@ impl Config {
             Some("webgl") | Some("webgl2") => RendererChoice::WebGl,
             _ => RendererChoice::Auto,
         };
+        let websocket_updates = matches!(
+            query_param("updates")
+                .or_else(|| option_env!("CITYWARS_UPDATES").map(str::to_string))
+                .as_deref(),
+            Some("ws") | Some("websocket")
+        );
         Config {
             api_url,
             backend,
+            websocket_updates,
             renderer,
             show_stats: has_query_param("stats"),
         }

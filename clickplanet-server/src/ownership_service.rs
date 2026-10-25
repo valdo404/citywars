@@ -1,4 +1,9 @@
+// Without NATS only the in-memory click consumer is compiled.
+#![cfg_attr(not(feature = "nats"), allow(unused_imports, dead_code))]
+
+#[cfg(feature = "nats")]
 use async_nats::jetstream;
+#[cfg(feature = "nats")]
 use async_nats::jetstream::consumer::pull::Stream;
 use clickplanet_proto::clicks::{Click, Ownership, UpdateNotification};
 use futures_util::stream::Map;
@@ -14,7 +19,9 @@ use tracing::{error, info, warn};
 
 use crate::click_persistence::{ClickRepository, LeaderboardMaintainer, LeaderboardRepository};
 use crate::nats_commons;
-use crate::nats_commons::{get_stream, ConsumerConfig, PollingConsumerError};
+use crate::nats_commons::{ConsumerConfig, PollingConsumerError};
+#[cfg(feature = "nats")]
+use crate::nats_commons::get_stream;
 use crate::redis_click_persistence::{RedisClickRepository, RedisPersistenceError};
 
 const CONSUMER_NAME: &'static str = "tile-ownership-update";
@@ -41,11 +48,15 @@ pub struct OwnershipUpdateService {
     leaderboard_maintainer: Arc<dyn LeaderboardMaintainer>,
     click_sender: Arc<broadcast::Sender<Click>>,
     update_tx: Arc<broadcast::Sender<UpdateNotification>>,
+    #[cfg(feature = "nats")]
     jetstream: Arc<jetstream::Context>,
     consumer_config: ConsumerConfig,
+    /// Durable copy of every processed click (Redis) when no separate persister consumes NATS.
+    cold_repository: Option<Arc<dyn ClickRepository>>,
 }
 
 impl OwnershipUpdateService {
+    #[cfg(feature = "nats")]
     pub fn new(
         click_repository: Arc<dyn ClickRepository>,
         leaderboard_maintainer: Arc<dyn LeaderboardMaintainer>,
@@ -61,9 +72,42 @@ impl OwnershipUpdateService {
             update_tx: update_sender,
             jetstream,
             consumer_config: consumer_config.unwrap_or_default(),
+            cold_repository: None,
         }
     }
 
+    /// Single-process mode: clicks come from the in-memory broadcast only, and are also written
+    /// to `cold_repository` (Redis) when there is one.
+    #[cfg(not(feature = "nats"))]
+    pub fn new_local(
+        click_repository: Arc<dyn ClickRepository>,
+        leaderboard_maintainer: Arc<dyn LeaderboardMaintainer>,
+        click_sender: Arc<broadcast::Sender<Click>>,
+        update_sender: Arc<broadcast::Sender<UpdateNotification>>,
+        consumer_config: Option<ConsumerConfig>,
+        cold_repository: Option<Arc<dyn ClickRepository>>,
+    ) -> Self {
+        Self {
+            click_repository,
+            leaderboard_maintainer,
+            click_sender,
+            update_tx: update_sender,
+            consumer_config: consumer_config.unwrap_or_default(),
+            cold_repository,
+        }
+    }
+
+    #[cfg(not(feature = "nats"))]
+    pub async fn run(&self) -> Result<(), ConsumerError> {
+        let click_rx = self.click_sender.subscribe();
+        let click_handle = Arc::new(self.clone()).launch_direct_consumer(click_rx);
+        if let Err(e) = click_handle.await {
+            error!("Click processing task failed: {:?}", e);
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "nats")]
     pub async fn run(&self) -> Result<(), ConsumerError> {
         let click_rx = self.click_sender.subscribe();
         let nats_consumer: Stream = self.create_consumer().await?;
@@ -118,6 +162,7 @@ impl OwnershipUpdateService {
         })
     }
 
+    #[cfg(feature = "nats")]
     async fn launch_nats_consumer(self, stream: Stream) -> JoinHandle<()> {
         let self_arc = Arc::new(self);
 
@@ -138,6 +183,7 @@ impl OwnershipUpdateService {
         })
     }
 
+    #[cfg(feature = "nats")]
     async fn handle_nats_message(&self, message: jetstream::Message) -> Result<(), ConsumerError> {
         let click: Click = match clickplanet_proto::clicks::Click::decode(message.payload.clone()) {
             Ok(click) => click,
@@ -168,6 +214,7 @@ impl OwnershipUpdateService {
         }
     }
 
+    #[cfg(feature = "nats")]
     async fn create_consumer(&self) -> Result<jetstream::consumer::pull::Stream, PollingConsumerError> {
         let stream = get_stream(self.jetstream.clone()).await?;
 
@@ -193,6 +240,11 @@ impl OwnershipUpdateService {
 
     async fn process_click(&self, click: Click) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let previous_ownership: Option<Ownership> = self.click_repository.save_click(click.tile_id as u32, &click).await?;
+        if let Some(cold) = &self.cold_repository {
+            if let Err(e) = cold.save_click(click.tile_id as u32, &click).await {
+                error!("Failed to persist click: {:?}", e);
+            }
+        }
 
         // Notify when the owner changes, including the first claim of an unowned tile (empty
         // previous country), so that live clients see every new ownership.
@@ -219,6 +271,7 @@ impl OwnershipUpdateService {
     }
 }
 
+#[cfg(feature = "nats")]
 async fn process_nats_messages(
     nats_stream: Stream,
     owner: Arc<OwnershipUpdateService>,

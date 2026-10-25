@@ -54,6 +54,55 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets
 
+  server-modes:
+    name: Server (${{ matrix.mode }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: nats
+            features: ""
+          - mode: nonats
+            features: "--no-default-features --features nonats"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Protobuf Compiler (protoc)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: server-${{ matrix.mode }}
+
+      - name: Build
+        run: cargo build -p clickplanet-server --all-targets ${{ matrix.features }}
+
+      # includes the SSE tests (live events, Last-Event-ID resumption, resync, heartbeat)
+      - name: Test
+        run: cargo test -p clickplanet-server ${{ matrix.features }}
+
+      - name: Clippy
+        run: cargo clippy -p clickplanet-server --all-targets ${{ matrix.features }}
+
+      - name: nats and nonats are mutually exclusive
+        if: matrix.mode == 'nonats'
+        run: |
+          if cargo check -p clickplanet-server --features nonats 2> check.log; then
+            echo "expected a compile error with both nats and nonats"; exit 1
+          fi
+          grep -q "mutually exclusive" check.log
+
   webassembly:
     name: Build WebAssembly
     runs-on: ubuntu-24.04
@@ -121,6 +170,15 @@ jobs:
 
       - name: Build Docker Images
         run: docker compose -f docker-compose.yml build
+
+      - name: Build and smoke-test the Cloud Run image (no NATS)
+        run: |
+          docker build -f Dockerfile.cloudrun -t citywars-cloudrun .
+          docker run -d --name citywars-cloudrun -e PORT=8080 -p 8080:8080 citywars-cloudrun
+          for i in $(seq 1 30); do curl -sf localhost:8080/v2/rpc/leaderboard && break; sleep 1; done
+          curl -sf localhost:8080/v2/rpc/leaderboard
+          { curl -s -m 3 -D - -o /dev/null localhost:8080/v2/events || true; } | grep -i "content-type: text/event-stream"
+          docker rm -f citywars-cloudrun
 
       # Publishing only happens from main; pull requests just check that the images build.
       - name: Log in to GitHub Container Registry

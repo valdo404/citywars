@@ -1,22 +1,30 @@
+#[cfg(feature = "nats")]
 use async_nats::{jetstream, ConnectError};
 use prost::Message;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+#[cfg(feature = "nats")]
+use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(feature = "nats")]
 use async_nats::jetstream::Context;
 use thiserror::Error;
 use tokio::sync::broadcast::Sender;
 use tracing::{info, instrument, warn, Span};
 use uuid::Uuid;
 use clickplanet_proto::clicks::{Click};
+#[cfg(feature = "nats")]
 use crate::nats_commons::{CLICK_STREAM_NAME, CLICK_SUBJECT_PREFIX};
 
 pub struct ClickService {
+    /// `None` in the single-process (`nonats`) mode: clicks only go through the in-memory broadcast.
+    #[cfg(feature = "nats")]
     jetstream: Arc<jetstream::Context>,
     sender: Arc<Sender<Click>>,
 }
 
 #[derive(Error, Debug)]
 pub enum ClickServiceError {
+    #[cfg(feature = "nats")]
     #[error("Failed to connect to NATS: {0}")]
     ConnectionError(#[from] ConnectError),  // Changed to specific ConnectError
     #[error("Failed to create stream: {0}")]
@@ -25,6 +33,7 @@ pub enum ClickServiceError {
     NatsError(String)
 }
 
+#[cfg(feature = "nats")]
 pub async fn get_or_create_jet_stream(nats_url: &str) -> Result<Context, ClickServiceError> {
     let client = async_nats::connect(nats_url).await?;
     let jetstream = async_nats::jetstream::new(client);
@@ -57,8 +66,15 @@ pub async fn get_or_create_jet_stream(nats_url: &str) -> Result<Context, ClickSe
 
 
 impl ClickService {
+    #[cfg(feature = "nats")]
     pub async fn new(jetstream: Arc<Context>, sender: Arc<Sender<Click>>) -> Result<Self, ClickServiceError> {
         Ok(Self { jetstream, sender })
+    }
+
+    /// Single-process mode: clicks are only broadcast in memory.
+    #[cfg(not(feature = "nats"))]
+    pub fn new_local(sender: Arc<Sender<Click>>) -> Self {
+        Self { sender }
     }
 
     #[instrument(
@@ -83,6 +99,7 @@ impl ClickService {
             .unwrap()
             .as_nanos() as u64;
 
+        #[cfg(feature = "nats")]
         let subject = format!("{}{}", CLICK_SUBJECT_PREFIX, request.tile_id);
 
         let response = clickplanet_proto::clicks::ClickResponse {
@@ -100,15 +117,20 @@ impl ClickService {
         let mut click_bytes = Vec::new();
         click_data.encode(&mut click_bytes)?;
 
-        let jetstream = self.jetstream.clone();
+        #[cfg(feature = "nats")]
+        {
+            let jetstream = self.jetstream.clone();
 
-        let result = jetstream.publish(subject, click_bytes.into())
-            .await
-            .map_err(|e| ClickServiceError::NatsError(e.to_string()));
+            let result = jetstream.publish(subject, click_bytes.into())
+                .await
+                .map_err(|e| ClickServiceError::NatsError(e.to_string()));
 
-        if let Err(e) = result {
-            warn!("Failed to send click to nats channel (service might be shutting down): {:?}", e);
+            if let Err(e) = result {
+                warn!("Failed to send click to nats channel (service might be shutting down): {:?}", e);
+            }
         }
+        #[cfg(not(feature = "nats"))]
+        drop(click_bytes);
 
         let send_error= self.sender.send(click_data);
         if let Err(e) = send_error {
