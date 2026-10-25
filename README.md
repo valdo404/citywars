@@ -2,6 +2,13 @@
 
 A Rust client implementation for interacting with [ClickPlanet](https://clickplanet.lol), a multiplayer geographic clicking game.
 
+Clickplanet itself is open source: [frontend](https://github.com/raphoester/clickplanet.lol-frontend)
+and [backend](https://github.com/raphoester/clickplanet.lol-backend), by raphoester (also linked here as the
+`original-frontend` / `original-backend` submodules). At the time of writing neither repository ships a licence
+file, so no Clickplanet code is copied into this repository; the reverse-engineering notes that used to live in
+`reverse-engineering/` were removed in favour of the upstream sources. A few API exploration commands are kept in
+`docs/clickplanet-api-examples.sh`.
+
 ## Protocol
 
 The game uses Protocol Buffers for all communication
@@ -106,3 +113,29 @@ cargo build
 - tokio-tungstenite: WebSocket client
 - tokio: Async runtime
 - native-tls: TLS support
+
+## Data files
+
+- `coordinates.json` (repository root): tile coordinates used by the robots, the Docker images and
+  `docker-compose.yml`. It is versioned once; `clickplanet-static/deploy_static.sh` uploads it to the static site.
+  It cannot be regenerated reliably yet (see Known issues), so it stays in git.
+- `tile_to_countries.json` / `country_to_tiles.json`: tile/country lookup tables read by the robots. The robots can
+  rebuild them from `countries.geojson` when they are missing, but the output has not been checked against the
+  versioned copies, so they stay in git.
+- `countries.geojson` is no longer versioned. Download it with `./scripts/fetch-countries-geojson.sh` (pinned to
+  [datasets/geo-countries](https://github.com/datasets/geo-countries) at commit `cbd21e1`, derived from Natural Earth,
+  public domain; SHA-256 checked). The Docker images fetch the same pinned file at build time.
+
+## Known issues
+
+- `wasm-bindgen` 0.2.99 (pinned in `Cargo.lock`) fails with "duplicate export name" on recent rustc toolchains.
+- The webapp needs the Dioxus CLI (`dx`, dioxus-cli 0.6). On some machines (e.g. Homebrew) `dx` is Deno's tool,
+  not Dioxus', and `asset!()` only works with the real one.
+- The static site bucket used for `CITYWARS_STATIC_SITE` in CI currently answers 403.
+- `clickplanet-webapp/src/scripts/compute_points.rs` is wrong: it ignores the `detail` parameter and only emits the
+  12 base icosahedron points, so it cannot regenerate `coordinates.json`. It also does not compile
+  (unresolved `glam` import).
+- `cargo check --workspace` fails on the native target: besides `compute-points`, `clickplanet-webapp` only builds for
+  `wasm32-unknown-unknown` (its wasm-only dependencies are missing on native), and the `clickplanet-server` binaries
+  hit the "never type fallback" lint that recent rustc denies by default. CI builds the native crates with
+  `--exclude clickplanet-webapp`.
