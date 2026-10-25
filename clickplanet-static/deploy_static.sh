@@ -64,6 +64,11 @@ deploy() {
     echo "Failed to upload files"
     exit 1
   fi
+
+  # coordinates.json is versioned only once, at the repository root
+  echo "Uploading coordinates.json"
+  gcloud storage cp "$SCRIPT_DIR/../coordinates.json" "gs://$bucket/static/coordinates.json" \
+    --cache-control="public, max-age=3600"
   
   echo "Successfully deployed static assets to gs://$bucket/"
   echo "Website URL: https://storage.googleapis.com/$bucket/index.html"
