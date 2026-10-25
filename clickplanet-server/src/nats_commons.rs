@@ -1,6 +1,9 @@
+#[cfg(feature = "nats")]
 use std::sync::Arc;
 use std::time::Duration;
+#[cfg(feature = "nats")]
 use async_nats::{jetstream, ConnectError};
+#[cfg(feature = "nats")]
 use async_nats::jetstream::Context;
 use thiserror::Error;
 use crate::click_persistence::{ClickRepositoryError, LeaderboardError};
@@ -29,6 +32,7 @@ impl Default for ConsumerConfig {
 
 #[derive(Error, Debug)]
 pub enum PollingConsumerError {
+    #[cfg(feature = "nats")]
     #[error("Failed to connect to NATS: {0}")]
     NatsConnection(#[from] ConnectError),
     #[error("Failed to process message: {0}")]
@@ -41,6 +45,7 @@ pub enum PollingConsumerError {
     LeaderboardPersistence(#[from] LeaderboardError),
 }
 
+#[cfg(feature = "nats")]
 pub async fn get_stream(jetstream: Arc<Context>) -> Result<jetstream::stream::Stream, PollingConsumerError> {
     jetstream.get_stream(CLICK_STREAM_NAME.to_string())
         .await

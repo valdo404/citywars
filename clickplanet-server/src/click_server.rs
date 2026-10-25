@@ -1,12 +1,21 @@
+#[cfg(all(feature = "nats", feature = "nonats"))]
+compile_error!(
+    "features `nats` and `nonats` are mutually exclusive: build the single-process mode with \
+     `--no-default-features --features nonats`"
+);
+
 mod click_service;
 mod nats_commons;
+mod sse_events;
 mod telemetry;
 mod redis_click_persistence;
 mod ownership_service;
 mod click_persistence;
 mod in_memory_click_persistence;
 
-use crate::click_service::{get_or_create_jet_stream, ClickService};
+use crate::click_service::ClickService;
+#[cfg(feature = "nats")]
+use crate::click_service::get_or_create_jet_stream;
 use axum::{
     extract::{Json, State},
     extract::ws::{Message as WebsocketMessage},
@@ -31,6 +40,7 @@ use futures_util::{SinkExt, StreamExt};
 use std::{time::Duration};
 use axum::extract::WebSocketUpgrade;
 use axum::http::header::CONTENT_TYPE;
+use axum::http::HeaderName;
 use axum::http::{Method, Request};
 use axum::serve::Serve;
 use prost::Message;
@@ -72,11 +82,27 @@ struct AppState<T: ClickRepository + Send + Sync> {
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    #[cfg(feature = "nats")]
     #[arg(long, env = "NATS_URL", default_value = "nats://localhost:4222")]
     nats_url: String,
 
+    #[cfg(feature = "nats")]
     #[arg(long, env = "REDIS_URL", default_value = "redis://localhost:6379")]
     redis_url: String,
+
+    /// Redis for durable state (e.g. Memorystore). Without it the state lives in memory only and
+    /// is lost on restart.
+    #[cfg(not(feature = "nats"))]
+    #[arg(long, env = "REDIS_URL")]
+    redis_url: Option<String>,
+
+    /// Interval of the SSE heartbeat comments.
+    #[arg(long, env = "SSE_HEARTBEAT_SECS", default_value = "20")]
+    sse_heartbeat_secs: u64,
+
+    /// Number of recent events kept to resume SSE clients (`Last-Event-ID`).
+    #[arg(long, env = "SSE_BUFFER", default_value = "50000")]
+    sse_buffer: usize,
 
     #[arg(long, env = "OTEL_EXPORTER_OTLP_ENDPOINT", default_value = "http://localhost:4317")]
     otlp_endpoint: String,
@@ -109,29 +135,67 @@ async fn run(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let (update_notification_sender, _) = broadcast::channel(100000);
     let update_sender_ref: Arc<Sender<UpdateNotification>> = Arc::new(update_notification_sender);
 
-    let cold_repository: Arc<RedisClickRepository> = Arc::new(RedisClickRepository::new(args.redis_url.as_str()).await?);
-    let papaya_honey = PapayaClickRepository::populate_with(cold_repository).await?;
+    #[cfg(feature = "nats")]
+    let (click_repository, leaderboard_repo, update_service, click_service) = {
+        let cold_repository: Arc<RedisClickRepository> = Arc::new(RedisClickRepository::new(args.redis_url.as_str()).await?);
+        let papaya_honey = PapayaClickRepository::populate_with(cold_repository).await?;
 
-    let leaderboard_repo: Arc<dyn LeaderboardRepository> = Arc::new(LeaderboardOnClicks(papaya_honey.clone()));
-    let click_repository: Arc<PapayaClickRepository> = Arc::new(papaya_honey.clone());
+        let leaderboard_repo: Arc<dyn LeaderboardRepository> = Arc::new(LeaderboardOnClicks(papaya_honey.clone()));
+        let click_repository: Arc<PapayaClickRepository> = Arc::new(papaya_honey.clone());
 
-    let jetstream = Arc::new(get_or_create_jet_stream(args.nats_url.as_str()).await?);
+        let jetstream = Arc::new(get_or_create_jet_stream(args.nats_url.as_str()).await?);
 
-    let update_service = Arc::new(OwnershipUpdateService::new(
-        click_repository.clone(),
-        click_repository.clone(),
-        click_sender_ref.clone(),
-        update_sender_ref.clone(),
-        jetstream.clone(),
-        Some(ConsumerConfig {
-            concurrent_processors: 2,
-            ack_wait: Duration::from_secs(20),
-            ..Default::default()
-        })
-    ));
+        let update_service = Arc::new(OwnershipUpdateService::new(
+            click_repository.clone(),
+            click_repository.clone(),
+            click_sender_ref.clone(),
+            update_sender_ref.clone(),
+            jetstream.clone(),
+            Some(ConsumerConfig {
+                concurrent_processors: 2,
+                ack_wait: Duration::from_secs(20),
+                ..Default::default()
+            })
+        ));
+        let click_service = Arc::new(ClickService::new(jetstream.clone(), click_sender_ref.clone()).await.unwrap());
+        (click_repository, leaderboard_repo, update_service, click_service)
+    };
+
+    // Single process: clicks go through the in-memory broadcast; Redis, when configured, restores
+    // the state at start-up and keeps a durable copy of every click.
+    #[cfg(not(feature = "nats"))]
+    let (click_repository, leaderboard_repo, update_service, click_service) = {
+        let cold_repository: Option<Arc<dyn ClickRepository>> = match &args.redis_url {
+            Some(url) => Some(Arc::new(RedisClickRepository::new(url.as_str()).await?)),
+            None => {
+                tracing::warn!("no REDIS_URL: the state is kept in memory only and lost on restart");
+                None
+            }
+        };
+        let papaya_honey = match &cold_repository {
+            Some(cold) => PapayaClickRepository::populate_with(cold.clone()).await?,
+            None => PapayaClickRepository::new(),
+        };
+        let leaderboard_repo: Arc<dyn LeaderboardRepository> = Arc::new(LeaderboardOnClicks(papaya_honey.clone()));
+        let click_repository: Arc<PapayaClickRepository> = Arc::new(papaya_honey.clone());
+        let update_service = Arc::new(OwnershipUpdateService::new_local(
+            click_repository.clone(),
+            click_repository.clone(),
+            click_sender_ref.clone(),
+            update_sender_ref.clone(),
+            Some(ConsumerConfig { concurrent_processors: 2, ..Default::default() }),
+            cold_repository,
+        ));
+        let click_service = Arc::new(ClickService::new_local(click_sender_ref.clone()));
+        (click_repository, leaderboard_repo, update_service, click_service)
+    };
+
+    // SSE: every update notification and click, with ids for Last-Event-ID resumption
+    let hub = sse_events::EventHub::new(args.sse_buffer, 100_000);
+    spawn_sse_feed(hub.clone(), update_sender_ref.subscribe(), click_sender_ref.subscribe());
 
     let state = AppState {
-        click_service: Arc::new(ClickService::new(jetstream.clone(), click_sender_ref.clone()).await.unwrap()),
+        click_service,
         click_repository: click_repository.clone(),
         leaderboard_repo: leaderboard_repo.clone(),
         update_notifification_broadcaster: update_sender_ref.clone(),
@@ -147,11 +211,13 @@ async fn run(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
         .route("/v2/rpc/leaderboard", get(handle_get_leaderboard))
         .route("/ws/listen", get(handle_ws_upgrade))
         .route("/v2/ws/listen", get(handle_ws_upgrade))
+        .with_state(state)
+        .merge(sse_events::router(hub, Duration::from_secs(args.sse_heartbeat_secs.max(1))))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-                .allow_headers([CONTENT_TYPE])
+                .allow_headers([CONTENT_TYPE, HeaderName::from_static("last-event-id")])
         )
         .layer(TraceLayer::new_for_http()
             .make_span_with(|request: &Request<_>| {
@@ -162,8 +228,7 @@ async fn run(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
                     version = ?request.version(),
                 )
             })
-        )
-        .with_state(state);
+        );
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", args.port)).await?;
     println!("Server listening on 0.0.0.0:{}", args.port);
@@ -192,6 +257,37 @@ async fn run(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+/// Publishes the broadcast updates and clicks on the SSE hub.
+fn spawn_sse_feed(
+    hub: Arc<sse_events::EventHub>,
+    mut updates: Receiver<UpdateNotification>,
+    mut clicks: Receiver<Click>,
+) {
+    let update_hub = hub.clone();
+    tokio::spawn(async move {
+        loop {
+            match updates.recv().await {
+                Ok(update) => {
+                    update_hub.publish("update", &update.encode_to_vec());
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => error!("SSE feed lagged by {n} updates"),
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+    tokio::spawn(async move {
+        loop {
+            match clicks.recv().await {
+                Ok(click) => {
+                    hub.publish("click", &click.encode_to_vec());
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => error!("SSE feed lagged by {n} clicks"),
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
 }
 
 async fn handle_click<T: ClickRepository>(

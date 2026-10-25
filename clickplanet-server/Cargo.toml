@@ -9,7 +9,7 @@ axum = {  version = "0.7.9", features = ["macros", "ws"] }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-async-nats = "0.32.1"
+async-nats = { version = "0.32.1", optional = true }
 rand = "0.8.5"
 prost = { workspace = true }
 bytes = "1.9.0"
@@ -33,11 +33,23 @@ url = "2.5.4"
 clap = { workspace = true, features = ["derive", "env"] }
 tower-http = { version="0.6.2", features = ["cors", "trace"]}
 
+[features]
+# NATS JetStream carries the clicks between servers (default).
+default = ["nats"]
+nats = ["dep:async-nats"]
+# Single-process mode without NATS (Cloud Run): clicks go through an in-memory broadcast, clients
+# get updates over SSE (and the websocket), Redis is optional. Build it with
+#   cargo build -p clickplanet-server --no-default-features --features nonats
+# Enabling it together with `nats` is a compile error.
+nonats = []
+
 [dev-dependencies]
 testcontainers = { version = "0.23.1" }
 testcontainers-modules = { version = "0.11.4", features = ["redis"] }
 tokio-test = "0.4.4"
 pretty_assertions = "1.4.1"
+tower = { version = "0.5.1", features = ["util"] }
+http-body-util = "0.1.2"
 
 [[bin]]
 name = "click-server"
@@ -46,3 +58,4 @@ path = "src/click_server.rs"
 [[bin]]
 name = "state-click-persister"
 path = "src/state_click_persister.rs"
+required-features = ["nats"]
