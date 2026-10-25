@@ -1,248 +1,221 @@
+//! Backend talking to a citywars (or Clickplanet) server, like the original `HTTPBackend`:
+//!
+//! - RPC calls are `POST`/`GET` with a JSON body `{"data": [protobuf bytes]}` and a JSON response
+//!   `{"data": "<base64 protobuf>"}`, retried up to 5 times with a timeout;
+//! - live updates come from the `/v2/ws/listen` websocket (binary `UpdateNotification`) and are
+//!   delivered in batches every `batch_update_duration_ms`. Unlike the original, the websocket
+//!   reconnects when it closes (servers and proxies close long-lived connections).
+
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
+
+use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-
-use crate::backends::backend::{Ownerships, OwnershipsGetter, TileClicker, Update, UpdatesListener};
-use anyhow::Result;
-use base64::engine::general_purpose;
-use clickplanet_proto::clicks::ClickRequest;
-use prost::Message;
-use uuid::Uuid;
-
-// WebAssembly compatible imports
+use clickplanet_proto::clicks::{BatchRequest, ClickRequest, LeaderboardResponse, OwnershipState, UpdateNotification};
 use gloo_net::http::Request;
+use gloo_timers::callback::{Interval, Timeout};
+use js_sys::{ArrayBuffer, Uint8Array};
+use prost::Message;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen::JsCast;
 use web_sys::{MessageEvent, WebSocket};
-use js_sys::{Uint8Array, ArrayBuffer};
 
-#[derive(Clone)]
-pub struct ClickServiceClient {
-    pub config: Config,
+use crate::backends::backend::{Update, UpdatesCallback};
+
+pub struct HttpBackend {
+    base_url: String,
+    timeout_ms: u32,
+    batch_update_duration_ms: u32,
+    pending: Rc<RefCell<Vec<Update>>>,
+    callbacks: Rc<RefCell<Vec<UpdatesCallback>>>,
+    listening: Cell<bool>,
 }
 
-impl ClickServiceClient {
-    pub async fn fetch(&self, verb: &str, path: &str, body: Option<&[u8]>) -> Result<Option<Vec<u8>>> {
-        let url = format!("{}{}", self.config.base_url, path);
-        let config = self.config.timeout_ms;
-        // retry loop
-        for _ in 0..5 {
-            let res = self.make_request(verb, &url, body, config).await;
-            if let Ok(r) = res {
-                return r;
-            }
-        }
+fn update_from_notification(n: UpdateNotification) -> Update {
+    Update {
+        tile: n.tile_id.max(0) as u32,
+        previous_country: (!n.previous_country_id.is_empty()).then_some(n.previous_country_id),
+        new_country: n.country_id,
+    }
+}
 
-        Err(anyhow::anyhow!("Failed to fetch after multiple retries"))
+impl HttpBackend {
+    pub fn new(base_url: String, timeout_ms: u32, batch_update_duration_ms: u32) -> Self {
+        HttpBackend {
+            base_url,
+            timeout_ms,
+            batch_update_duration_ms,
+            pending: Rc::new(RefCell::new(Vec::new())),
+            callbacks: Rc::new(RefCell::new(Vec::new())),
+            listening: Cell::new(false),
+        }
     }
 
-
-    async fn make_request(&self, verb: &str, url: &str, body: Option<&[u8]>, _timeout_ms: u32) -> Result<Result<Option<Vec<u8>>>> {
-        let request_builder = match verb {
+    async fn fetch_once(&self, verb: &str, url: &str, body: Option<&[u8]>) -> Result<Option<Vec<u8>>, String> {
+        let signal = web_sys::AbortSignal::timeout_with_u32(self.timeout_ms);
+        let builder = match verb {
             "POST" => Request::post(url),
             _ => Request::get(url),
-        };
-        
-        // Handle body if present - convert bytes to JS ArrayBuffer
-        let request = if let Some(b) = body {
-            // Create a Uint8Array from the byte slice
-            let uint8_array = js_sys::Uint8Array::new(&unsafe { js_sys::Uint8Array::view(b) }.into());
-            // Convert to ArrayBuffer which can be used with gloo-net
-            let array_buffer = uint8_array.buffer();
-            request_builder.body(array_buffer)?
-        } else {
-            request_builder.build()?
-        };
-
-        let res = request.send().await?;
-        if !res.ok() {
-            return Ok(Err(anyhow::anyhow!(
-                "Failed to fetch: {}",
-                res.status()
-            )));
         }
-        
-        let json_text = res.text().await?;
-        let json: serde_json::Value = serde_json::from_str(&json_text)?;
-
-        let base64_string = json.get("data").and_then(|v| v.as_str());
-
-        Ok(Ok(base64_string.map(|s| {
-            general_purpose::STANDARD.decode(s).unwrap()
-        })))
-    }
-}
-
-#[derive(Clone)]
-#[allow(dead_code)]
-pub struct HTTPBackend {
-    client: ClickServiceClient,
-    pending_updates: Vec<Update>,
-    update_batch_callbacks: HashMap<String, Arc<Mutex<Box<dyn Fn(Vec<Update>) + Send + Sync + 'static>>>>
-}
-
-#[allow(dead_code)]
-impl HTTPBackend {
-
-    pub fn new(client: ClickServiceClient, _batch_update_duration_ms: u64) -> Self {
-        // Create a simplified version without the problematic timer
-        let backend = Self {
-            client,
-            pending_updates: Vec::new(),
-            update_batch_callbacks: HashMap::new(),
+        .header("Content-Type", "application/json")
+        .abort_signal(Some(&signal));
+        let request = match body {
+            Some(bytes) => builder
+                .json(&serde_json::json!({ "data": bytes }))
+                .map_err(|e| e.to_string())?,
+            None => builder.build().map_err(|e| e.to_string())?,
         };
-        
-        // COMMENTED OUT: Timer implementation causing compilation issues
-        /*
-        // This would be a WebAssembly timer implementation
-        struct TimerState {
-            backend: HTTPBackend,
-            batch_update_duration_ms: usize,
+        let response = request.send().await.map_err(|e| e.to_string())?;
+        if !response.ok() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(format!("{verb} {url}: {} {text}", response.status()));
         }
-        
-        let timer_state = Box::new(TimerState {
-            backend: backend.clone(),
-            batch_update_duration_ms: batch_update_duration_ms as usize,
-        });
-        
-        // Timer logic would go here
-        */
-        
-        // TODO: Implement proper WebAssembly timer functionality
-        
-        backend
-    }
-
-
-}
-
-impl TileClicker for HTTPBackend {
-    fn click_tile(&mut self, tile_id: u32, country_id: String) -> () {
-        let payload = ClickRequest {
-            tile_id: tile_id.try_into().unwrap(),
-            country_id,
-        };
-        let mut buf = Vec::new();
-
-        payload.encode(&mut buf).unwrap();
-        // dbg!(&buf);
-        let _ = self.client.fetch("POST", "/v2/rpc/click", Some(buf.as_slice()));
-    }
-}
-
-impl OwnershipsGetter for HTTPBackend {
-    fn get_current_ownerships_by_batch(
-        &self,
-        batch_size: usize,
-        max_index: usize,
-        callback: Box<dyn Fn(Ownerships) + Send + Sync>,
-    ) {
-        // COMMENTED OUT: Implementation causing move issues with callback
-        // Instead using a simplified version that compiles
-        
-        // Move the callback into an Arc once, outside the loop
-        let callback = std::sync::Arc::new(callback);
-        
-        for _i in (1..max_index).step_by(batch_size) {
-            // Clone the Arc for this iteration
-            let callback_ref = callback.clone();
-            
-            // Create a simple placeholder implementation that at least compiles
-            spawn_local(async move {
-                // This is a placeholder - will be properly implemented later
-                callback_ref(Ownerships { bindings: HashMap::new() });
-            });
+        let json: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+        match json.get("data").and_then(|v| v.as_str()) {
+            Some(data) if !data.is_empty() => STANDARD.decode(data).map(Some).map_err(|e| e.to_string()),
+            _ => Ok(None),
         }
     }
-}
 
-
-impl UpdatesListener for HTTPBackend {
-    fn listen_for_updates(&self, _callback: Box<dyn Fn(Update) + Send + Sync>) {
-        // COMMENTED OUT: WebSocket implementation causing compilation issues
-        /*
-        let protocol = if self.client.config.base_url.starts_with("https") {
-            "wss"
-        } else {
-            "ws"
-        };
-
-        let host = self
-            .client
-            .config
-            .base_url
-            .replace("https://", "")
-            .replace("http://", "");
-
-        let url = format!("{}//{}/v2/ws/listen", protocol, host);
-
-        let config = self.client.config.timeout_ms;
-
-        // Use web_sys WebSocket in WebAssembly instead of tokio-tungstenite
-        let ws = WebSocket::new(&url).unwrap();
-        ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
-        
-        // Set up message handler with Arc to avoid cloning issues
-        let callback = std::sync::Arc::new(_callback);
-        let callback_ref = callback.clone();
-        let callback_closure = Closure::wrap(Box::new(move |event: MessageEvent| {
-            if let Ok(buf) = event.data().dyn_into::<ArrayBuffer>() {
-                let array = Uint8Array::new(&buf);
-                let data = array.to_vec();
-                
-                // Try to parse the protocol buffer message
-                if let Ok(notification) = clickplanet_proto::clicks::UpdateNotification::decode(data.as_slice()) {
-                    callback_ref(Update {
-                        tile: notification.tile_id as u32,
-                        previous_country: None, // WebSocket updates don't provide previous state
-                        new_country: notification.country_id,
-                    });
+    /// Same retry policy as the original client: up to 5 attempts.
+    async fn fetch(&self, verb: &str, path: &str, body: Option<&[u8]>) -> Result<Option<Vec<u8>>, String> {
+        let url = format!("{}{}", self.base_url, path);
+        let mut last_error = String::new();
+        for attempt in 0..5 {
+            match self.fetch_once(verb, &url, body).await {
+                Ok(data) => return Ok(data),
+                Err(e) => {
+                    log::warn!("{attempt} failed to fetch {verb} {path}: {e}");
+                    last_error = e;
                 }
             }
-        }) as Box<dyn FnMut(MessageEvent)>);
-        */
-        
-        // Temporarily disabled WebSocket functionality
-        // TODO: Fix WebSocket implementation
-        let _unused = _callback; // To prevent unused variable warning
-        unimplemented!("WebSocket functionality temporarily disabled for compilation");
-    }
-
-    fn listen_for_updates_batch(
-        &mut self,
-        callback: Box<dyn Fn(Vec<Update>) + Send + Sync>,
-    ) -> () {
-        let id = Uuid::new_v4().to_string();
-        self.update_batch_callbacks.insert(id, Arc::new(Mutex::new(callback)));
-        // Callback is removed when the application terminates
-    }
-}
-
-
-// WebAssembly-compatible WebSocket initialization
-#[allow(dead_code)]
-fn init_websocket(url: &str, mut callback: Box<dyn FnMut(Vec<u8>)>) -> WebSocket {
-    // Added 'mut' keyword to the callback parameter to fix mutable borrow error
-    let ws = WebSocket::new(url).unwrap();
-    ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
-    
-    // Set up message handling
-    let closure = Closure::wrap(Box::new(move |event: MessageEvent| {
-        if let Ok(array_buffer) = event.data().dyn_into::<ArrayBuffer>() {
-            let array = Uint8Array::new(&array_buffer);
-            let data = array.to_vec();
-            callback(data);
         }
-    }) as Box<dyn FnMut(MessageEvent)>);
-    
-    ws.set_onmessage(Some(closure.as_ref().unchecked_ref()));
-    closure.forget(); // Important: prevent closure from being dropped
-    
-    ws
+        Err(format!("Failed to fetch {verb} {path}: {last_error}"))
+    }
+
+    pub async fn click_tile(&self, tile_id: u32, country_id: &str) -> Result<(), String> {
+        let request = ClickRequest {
+            tile_id: tile_id as i32,
+            country_id: country_id.to_string(),
+        };
+        self.fetch("POST", "/v2/rpc/click", Some(&request.encode_to_vec())).await?;
+        Ok(())
+    }
+
+    pub async fn get_current_ownerships_by_batch(
+        &self,
+        batch_size: u32,
+        max_index: u32,
+        callback: &mut dyn FnMut(Vec<(u32, String)>),
+    ) -> Result<(), String> {
+        let mut start = 1;
+        while start < max_index {
+            let request = BatchRequest {
+                start_tile_id: start as i32,
+                end_tile_id: (start + batch_size) as i32,
+            };
+            let data = self
+                .fetch("POST", "/v2/rpc/ownerships-by-batch", Some(&request.encode_to_vec()))
+                .await?
+                .unwrap_or_default();
+            let state = OwnershipState::decode(data.as_slice()).map_err(|e| e.to_string())?;
+            callback(
+                state
+                    .ownerships
+                    .into_iter()
+                    .map(|o| (o.tile_id, o.country_id))
+                    .collect(),
+            );
+            start += batch_size;
+        }
+        Ok(())
+    }
+
+    pub async fn leaderboard(&self) -> Result<Vec<(String, u32)>, String> {
+        let data = self.fetch("GET", "/v2/rpc/leaderboard", None).await?.unwrap_or_default();
+        let response = LeaderboardResponse::decode(data.as_slice()).map_err(|e| e.to_string())?;
+        Ok(response.entries.into_iter().map(|e| (e.country_id, e.score)).collect())
+    }
+
+    pub fn listen_for_updates_batch(&self, callback: UpdatesCallback) {
+        self.callbacks.borrow_mut().push(callback);
+        if self.listening.replace(true) {
+            return;
+        }
+
+        let pending = self.pending.clone();
+        let callbacks = self.callbacks.clone();
+        Interval::new(self.batch_update_duration_ms, move || {
+            let updates = std::mem::take(&mut *pending.borrow_mut());
+            if !updates.is_empty() {
+                for callback in callbacks.borrow().iter() {
+                    callback(updates.clone());
+                }
+            }
+        })
+        .forget();
+
+        let ws_url = format!("{}/v2/ws/listen", self.base_url.replacen("http", "ws", 1));
+        connect_websocket(Rc::new(ws_url), self.pending.clone(), 1000);
+    }
 }
 
-#[derive(Clone)]
-pub struct Config {
-    pub base_url: String,
-    pub timeout_ms: u32,
+/// Opens the update websocket and reconnects (with backoff up to 10 s) when it closes.
+fn connect_websocket(url: Rc<String>, pending: Rc<RefCell<Vec<Update>>>, retry_ms: u32) {
+    let websocket = match WebSocket::new(&url) {
+        Ok(ws) => ws,
+        Err(e) => {
+            log::error!("websocket {url}: {e:?}");
+            schedule_reconnect(url, pending, retry_ms);
+            return;
+        }
+    };
+    websocket.set_binary_type(web_sys::BinaryType::Arraybuffer);
+
+    let on_message = {
+        let pending = pending.clone();
+        Closure::<dyn FnMut(MessageEvent)>::new(move |event: MessageEvent| {
+            if let Ok(buffer) = event.data().dyn_into::<ArrayBuffer>() {
+                let bytes = Uint8Array::new(&buffer).to_vec();
+                match UpdateNotification::decode(bytes.as_slice()) {
+                    Ok(n) => pending.borrow_mut().push(update_from_notification(n)),
+                    Err(e) => log::warn!("bad update notification: {e}"),
+                }
+            }
+        })
+    };
+    websocket.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
+    on_message.forget();
+
+    let on_open = {
+        let url = url.clone();
+        Closure::<dyn FnMut()>::new(move || log::info!("Websocket connected to {url}"))
+    };
+    websocket.set_onopen(Some(on_open.as_ref().unchecked_ref()));
+    on_open.forget();
+
+    let on_close = Closure::once_into_js(move || {
+        log::warn!("Websocket closed, reconnecting in {retry_ms} ms");
+        schedule_reconnect(url, pending, retry_ms);
+    });
+    websocket.set_onclose(Some(on_close.unchecked_ref()));
+}
+
+fn schedule_reconnect(url: Rc<String>, pending: Rc<RefCell<Vec<Update>>>, retry_ms: u32) {
+    Timeout::new(retry_ms, move || connect_websocket(url, pending, (retry_ms * 2).min(10_000))).forget();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_previous_country_means_none() {
+        let u = update_from_notification(UpdateNotification {
+            tile_id: 3,
+            country_id: "fr".into(),
+            previous_country_id: String::new(),
+        });
+        assert_eq!(u.previous_country, None);
+    }
 }

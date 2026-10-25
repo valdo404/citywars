@@ -3,9 +3,6 @@ name = "clickplanet-webapp"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-crate-type = ["cdylib"]
-
 [[bin]]
 name = "generate-atlas"
 path = "src/scripts/generate_atlas.rs"
@@ -16,6 +13,7 @@ path = "src/scripts/compute_points.rs"
 
 [dependencies]
 clickplanet-proto = { path = "../clickplanet-proto" }
+clickplanet-globe-protocol = { path = "../clickplanet-globe-protocol" }
 serde = {workspace = true, features = ["derive"] }
 prost.workspace = true
 anyhow = "1.0"
@@ -30,12 +28,8 @@ async-trait = "0.1.83"
 futures-util = "0.3.31"
 # Used by both the web globe and the native compute-points script.
 glam = "0.30.1"
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-reqwest = { version = "0.12.9", features = ["json"] }
-tokio = { version = "1.42.0", features = ["sync", "rt", "time", "macros", "io-util", "net"] }
-tokio-tungstenite = "0.26.1"
-wgpu = { version = "25.0.0", features = ["wgsl"], default-features = true }
+# Spatial index used to pick the tile under the pointer.
+rstar.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 raw-window-handle = "0.6.0"
@@ -46,7 +40,11 @@ web-sys = { version = "0.3", features = [
     "CanvasRenderingContext2d", "HtmlCanvasElement", "MouseEvent", "EventTarget",
     "EventListener", "Event", "DomRect", "GpuCanvasContext", "Navigator",
     "WebGlBuffer", "WebGlProgram", "WebGlRenderingContext", "WebGlShader",
-    "WebGlTexture", "WebGl2RenderingContext", "Performance" ] }
+    "WebGlTexture", "WebGl2RenderingContext", "Performance",
+    "Location", "UrlSearchParams", "PointerEvent", "AbortSignal", "Response", "Blob",
+    "ImageBitmap", "ImageBitmapOptions", "ResizeQuality", "PremultiplyAlpha",
+    "ColorSpaceConversion", "EventSource", "Storage", "Url", "Worker", "WorkerOptions",
+    "WorkerType", "MessageChannel", "MessagePort", "OffscreenCanvas", "PerformanceMark" ] }
 js-sys = "0.3"
 serde-wasm-bindgen = "0.6.5"
 wasm-bindgen-futures = "0.4.39"
@@ -56,6 +54,7 @@ gloo-utils = { version = "0.2.0", features = ["serde"] }
 gloo-timers = { version = "0.3.0", features = ["futures"] }
 gloo-console = "0.3.0"
 gloo-render = "0.2.0"
+futures = "0.3.31"
 wgpu = { version = "25.0.0", features = ["webgl", "webgpu", "wgsl"], default-features = false }
 getrandom = { version = "0.2.10", features = ["js"] }
 console_log = "1.0.0"
