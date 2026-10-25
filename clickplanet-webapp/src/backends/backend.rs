@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::app::config::{BackendKind, Config};
 use crate::backends::fake_backend::FakeBackend;
-use crate::backends::http_backend::HttpBackend;
+use crate::backends::http_backend::{HttpBackend, UpdatesTransport};
 
 /// A tile changed owner.
 #[derive(Debug, Clone, PartialEq)]
@@ -28,7 +28,10 @@ impl Backend {
     /// `countries`: the country codes the fake backend's robots play for.
     pub fn from_config(config: &Config, countries: Vec<String>) -> Self {
         match config.backend {
-            BackendKind::Http => Backend::Http(Rc::new(HttpBackend::new(config.api_url.clone(), 2000, 100))),
+            BackendKind::Http => {
+                let transport = if config.websocket_updates { UpdatesTransport::WebSocket } else { UpdatesTransport::Sse };
+                Backend::Http(Rc::new(HttpBackend::new(config.api_url.clone(), transport, 2000, 100)))
+            }
             BackendKind::Fake => Backend::Fake(FakeBackend::new(500, countries)),
         }
     }
@@ -77,6 +80,13 @@ impl Backend {
 
     /// Registers a callback for batched live updates (every 100 ms for HTTP, 500 ms for the fake
     /// backend, like the original).
+    /// Called when live updates were lost and the ownerships must be reloaded (SSE `resync`).
+    pub fn on_resync(&self, callback: Rc<dyn Fn()>) {
+        if let Backend::Http(b) = self {
+            b.on_resync(callback);
+        }
+    }
+
     pub fn listen_for_updates_batch(&self, callback: UpdatesCallback) {
         match self {
             Backend::Http(b) => b.listen_for_updates_batch(callback),

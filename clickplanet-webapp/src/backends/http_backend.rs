@@ -2,9 +2,11 @@
 //!
 //! - RPC calls are `POST`/`GET` with a JSON body `{"data": [protobuf bytes]}` and a JSON response
 //!   `{"data": "<base64 protobuf>"}`, retried up to 5 times with a timeout;
-//! - live updates come from the `/v2/ws/listen` websocket (binary `UpdateNotification`) and are
-//!   delivered in batches every `batch_update_duration_ms`. Unlike the original, the websocket
-//!   reconnects when it closes (servers and proxies close long-lived connections).
+//! - live updates come from Server-Sent Events on `/v2/events` (`EventSource`, base64
+//!   `UpdateNotification`, resumed with `Last-Event-ID` by the browser) or, with
+//!   [`UpdatesTransport::WebSocket`], from the `/v2/ws/listen` websocket like the original (needed
+//!   for servers without SSE, such as clickplanet.lol). They are delivered in batches every
+//!   `batch_update_duration_ms`. Unlike the original, the websocket reconnects when it closes.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -18,12 +20,23 @@ use js_sys::{ArrayBuffer, Uint8Array};
 use prost::Message;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{MessageEvent, WebSocket};
+use web_sys::{EventSource, MessageEvent, WebSocket};
 
 use crate::backends::backend::{Update, UpdatesCallback};
 
+/// How live updates reach the client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdatesTransport {
+    Sse,
+    WebSocket,
+}
+
+type ResyncCallbacks = Rc<RefCell<Vec<Rc<dyn Fn()>>>>;
+
 pub struct HttpBackend {
     base_url: String,
+    transport: UpdatesTransport,
+    resync_callbacks: ResyncCallbacks,
     timeout_ms: u32,
     batch_update_duration_ms: u32,
     pending: Rc<RefCell<Vec<Update>>>,
@@ -40,9 +53,11 @@ fn update_from_notification(n: UpdateNotification) -> Update {
 }
 
 impl HttpBackend {
-    pub fn new(base_url: String, timeout_ms: u32, batch_update_duration_ms: u32) -> Self {
+    pub fn new(base_url: String, transport: UpdatesTransport, timeout_ms: u32, batch_update_duration_ms: u32) -> Self {
         HttpBackend {
             base_url,
+            transport,
+            resync_callbacks: Rc::new(RefCell::new(Vec::new())),
             timeout_ms,
             batch_update_duration_ms,
             pending: Rc::new(RefCell::new(Vec::new())),
@@ -155,9 +170,59 @@ impl HttpBackend {
         })
         .forget();
 
-        let ws_url = format!("{}/v2/ws/listen", self.base_url.replacen("http", "ws", 1));
-        connect_websocket(Rc::new(ws_url), self.pending.clone(), 1000);
+        match self.transport {
+            UpdatesTransport::WebSocket => {
+                let ws_url = format!("{}/v2/ws/listen", self.base_url.replacen("http", "ws", 1));
+                connect_websocket(Rc::new(ws_url), self.pending.clone(), 1000);
+            }
+            UpdatesTransport::Sse => {
+                let url = format!("{}/v2/events", self.base_url);
+                connect_event_source(&url, self.pending.clone(), self.resync_callbacks.clone());
+            }
+        }
     }
+
+    /// Called when the server cannot replay the missed SSE events: the ownerships must be
+    /// reloaded.
+    pub fn on_resync(&self, callback: Rc<dyn Fn()>) {
+        self.resync_callbacks.borrow_mut().push(callback);
+    }
+}
+
+/// Subscribes to the SSE stream. `EventSource` reconnects by itself and sends `Last-Event-ID`,
+/// so the server replays what was missed (or sends `resync`).
+fn connect_event_source(url: &str, pending: Rc<RefCell<Vec<Update>>>, resync: ResyncCallbacks) {
+    let source = match EventSource::new(url) {
+        Ok(s) => s,
+        Err(e) => return log::error!("EventSource {url}: {e:?}"),
+    };
+    let on_update = Closure::<dyn FnMut(MessageEvent)>::new(move |event: MessageEvent| {
+        let Some(data) = event.data().as_string() else { return };
+        match STANDARD.decode(data.trim()).map_err(|e| e.to_string()).and_then(|bytes| {
+            UpdateNotification::decode(bytes.as_slice()).map_err(|e| e.to_string())
+        }) {
+            Ok(n) => pending.borrow_mut().push(update_from_notification(n)),
+            Err(e) => log::warn!("bad SSE update: {e}"),
+        }
+    });
+    let _ = source.add_event_listener_with_callback("update", on_update.as_ref().unchecked_ref());
+    on_update.forget();
+
+    let on_resync = Closure::<dyn FnMut(MessageEvent)>::new(move |_event: MessageEvent| {
+        log::warn!("SSE resync requested: reloading the ownerships");
+        for callback in resync.borrow().iter() {
+            callback();
+        }
+    });
+    let _ = source.add_event_listener_with_callback("resync", on_resync.as_ref().unchecked_ref());
+    on_resync.forget();
+
+    let url = url.to_string();
+    let on_open = Closure::<dyn FnMut()>::new(move || log::info!("SSE connected to {url}"));
+    source.set_onopen(Some(on_open.as_ref().unchecked_ref()));
+    on_open.forget();
+    // keep the EventSource alive for the page's lifetime
+    std::mem::forget(source);
 }
 
 /// Opens the update websocket and reconnects (with backoff up to 10 s) when it closes.
