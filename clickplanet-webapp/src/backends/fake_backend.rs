@@ -39,11 +39,11 @@ impl FakeBackend {
         })
         .forget();
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for country in countries {
-            let mut tile_id: u32 = rng.gen_range(0..10_000);
-            let gap: u32 = rng.gen_range(1..100);
-            let period: u32 = rng.gen_range(1..1000);
+            let mut tile_id: u32 = rng.random_range(0..10_000);
+            let gap: u32 = rng.random_range(1..100);
+            let period: u32 = rng.random_range(1..1000);
             let robot = Rc::downgrade(&backend);
             Interval::new(period, move || {
                 if let Some(b) = robot.upgrade() {

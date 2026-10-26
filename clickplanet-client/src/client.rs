@@ -194,7 +194,7 @@ impl ClickPlanetRestClient {
         while start_tile_id <= max_tile_id {
             let end_tile_id = (start_tile_id + BATCH_SIZE).min(max_tile_id);
 
-            let millis = rand::thread_rng().gen_range(300..=1000);
+            let millis = rand::rng().random_range(300..=1000);
             sleep(Duration::from_millis(millis)).await;
 
             let result: Result<OwnershipState, Box<dyn Error + Send + Sync>> = self.get_ownerships_by_batch(start_tile_id, end_tile_id).await;
@@ -331,7 +331,7 @@ pub fn generate_websocket_key() -> String {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
     use rand::Rng;
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut key = [0u8; 16];
     rng.fill(&mut key);
     STANDARD.encode(key)
