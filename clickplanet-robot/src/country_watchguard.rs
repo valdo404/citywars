@@ -125,7 +125,7 @@ impl CountryWatchguard {
     }
 
     async fn wait_with_jitter(&self) {
-        let millis = rand::thread_rng().gen_range(500..=800);
+        let millis = rand::rng().random_range(500..=800);
         sleep(Duration::from_millis(millis)).await;
     }
 

@@ -20,7 +20,7 @@ anyhow = "1.0"
 image = { version = "0.25.5", default-features = false, features = ["png", "jpeg"] }
 serde_json = "1.0"
 uuid = { version = "1.11.0", features = ["v4", "serde"] }
-rand = "0.8.5"
+rand = "0.9.1"
 base64 = "0.22.1"
 bytemuck = { version = "1.14", features = ["derive"] }
 lazy_static = "1.4.0"
@@ -57,6 +57,9 @@ gloo-render = "0.2.0"
 futures = "0.3.31"
 wgpu = { version = "25.0.0", features = ["webgl", "webgpu", "wgsl"], default-features = false }
 getrandom = { version = "0.2.10", features = ["js"] }
+# rand 0.9 uses getrandom 0.3, which needs the `wasm_js` feature on wasm32-unknown-unknown
+# (since 0.3.4 the feature alone selects the backend, no `--cfg getrandom_backend` needed).
+getrandom_03 = { package = "getrandom", version = "0.3.4", features = ["wasm_js"] }
 console_log = "1.0.0"
 dioxus = { version = "0.6.2", features = ["web", "router"] }
 dioxus-web = { version = "0.6.2" }
